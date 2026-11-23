@@ -1,3 +1,4 @@
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
@@ -6,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.idrish.dd8max"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "25.1.8937393"
 
     compileOptions {
