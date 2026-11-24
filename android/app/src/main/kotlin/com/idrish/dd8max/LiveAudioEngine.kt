@@ -107,6 +107,7 @@ class LiveAudioEngine {
         val lowPass = FloatArray(5)
         val cutoffs = floatArrayOf(100f, 350f, 1000f, 3500f, 9000f)
         val alphas = FloatArray(5) { i -> (1.0 - exp((-2.0 * PI * cutoffs[i] / rate))).toFloat() }
+        var gateGain = 1.0f
 
         running = true
         input.startRecording()
@@ -121,20 +122,26 @@ class LiveAudioEngine {
                 for (i in 0 until count) {
                     val raw = inputSamples[i] / 32768.0f
                     val strength = ancLevelValue
+                    // Adjustable speech high-pass: stronger setting removes more low-frequency rumble.
+                    val cutoffHz = 75.0f + 135.0f * strength
+                    val hpAlpha = (rate / (rate + 2.0 * PI * cutoffHz)).toFloat()
                     val high = if (noiseReductionValue) {
-                        val filtered = 0.995f * (previousHigh + raw - previousInput)
+                        val filtered = hpAlpha * (previousHigh + raw - previousInput)
                         previousInput = raw
                         previousHigh = filtered
                         filtered
                     } else raw
                     val cleaned = raw * (1.0f - strength) + high * strength
                     val magnitude = abs(cleaned)
-                    val threshold = 0.004f + 0.018f * strength
-                    val gate = if (!noiseGateValue) 1.0f else if (magnitude < threshold) 0.10f else if (magnitude < threshold * 2.2f) {
-                        0.10f + (magnitude - threshold) / (threshold * 1.2f) * 0.90f
+                    val threshold = 0.0018f + 0.009f * strength
+                    val targetGate = if (!noiseGateValue) 1.0f else if (magnitude < threshold) 0.06f else if (magnitude < threshold * 2.0f) {
+                        0.06f + (magnitude - threshold) / threshold * 0.94f
                     } else 1.0f
+                    // Fast attenuation, slower recovery to avoid chopping the start of words.
+                    val smoothing = if (targetGate < gateGain) 0.24f else 0.035f
+                    gateGain += (targetGate - gateGain) * smoothing
 
-                    var dry = cleaned * gate
+                    var dry = cleaned * gateGain
                     if (!bypassValue) {
                         val gains = eqGains
                         val bands = FloatArray(5)
