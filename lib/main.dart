@@ -31,6 +31,8 @@ class ConsoleHome extends StatefulWidget {
 }
 class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
+  int delayMode=0;
+  static const List<String> delayModeNames=['STANDARD','ANALOG','TAPE','WARM','MOD','DUAL'];
   Duration fileDuration=Duration.zero, filePosition=Duration.zero;
   bool playbackPaused=false;
   double level=80,feedback=38,delayTime=320,mix=45;
@@ -176,6 +178,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         mix: mix / 100, level: level / 100, eq: eq,
         pingPong: pingPong, dual: dual, bypass: bypass,
         noiseReduction: noiseReduction, noiseGate: noiseGate, ancLevel: ancLevel / 100,
+        mode: delayMode,
       );
       if (!mounted) return;
       setState(() => processed = output);
@@ -196,7 +199,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       }
       final permission=await Permission.microphone.request();
       if(!permission.isGranted){note('Microphone permission allow karo.');return;}
-      final caps=await liveChannel.invokeMapMethod<String,dynamic>('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100,'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq});
+      final caps=await liveChannel.invokeMapMethod<String,dynamic>('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100,'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq,'mode':delayMode});
       if(mounted)setState(()=>liveMonitoring=true);
       final ns=caps?['noiseSuppressor']==true;
       final aec=caps?['echoCanceler']==true;
@@ -227,7 +230,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Map<String,dynamic> _liveConfig()=>({
     'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,
     'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100,
-    'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq,
+    'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq,'mode':delayMode,
   });
   Future<void> _updateLiveEngine() async {
     if(!liveMonitoring)return;
@@ -273,156 +276,119 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(23),border:Border.all(color:Colors.white.withOpacity(.16))),child:c);
   Widget delayPage()=>scroll([
-    title('LIVE MIC','Real-time digital delay • headphones recommended'),
+    title('DD-8 DIGITAL DELAY','LIVE MIC • Rounded LED controls • Headphones recommended'),
     box(Column(children:[
-      const Icon(Icons.mic,color:gold,size:42),
-      Text(liveMonitoring?'LIVE EFFECT RUNNING':'MICROPHONE STANDBY',style:TextStyle(color:liveMonitoring?green:gold,fontWeight:FontWeight.w900,letterSpacing:1.2)),
-      const SizedBox(height:10),
-      SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:toggleLiveMonitor,icon:Icon(liveMonitoring?Icons.stop_circle:Icons.play_circle_fill),label:Text(liveMonitoring?'STOP LIVE MIC':'START LIVE MIC'),style:FilledButton.styleFrom(backgroundColor:liveMonitoring?Colors.redAccent:green,foregroundColor:Colors.black,padding:const EdgeInsets.symmetric(vertical:15)))),
+      const Icon(Icons.mic,color:gold,size:38),
+      Text(liveMonitoring?'LIVE MIC • EFFECT ON':'LIVE MIC • STANDBY',
+        style:TextStyle(color:liveMonitoring?green:gold,fontWeight:FontWeight.w900,letterSpacing:1.1)),
+      const SizedBox(height:9),
+      SizedBox(width:double.infinity,child:FilledButton.icon(
+        onPressed:toggleLiveMonitor,
+        icon:Icon(liveMonitoring?Icons.stop_circle:Icons.play_circle_fill),
+        label:Text(liveMonitoring?'STOP LIVE MIC':'START LIVE MIC'),
+        style:FilledButton.styleFrom(backgroundColor:liveMonitoring?Colors.redAccent:green,
+          foregroundColor:Colors.black,padding:const EdgeInsets.symmetric(vertical:14),
+          shape:const StadiumBorder()),
+      )),
     ])),
     box(Column(children:[
-      Row(children:[
-        Expanded(child:ledMetric('ECHO','${mix.round()}','%',mix,0,100,(v)=>_changeLive(()=>mix=v))),
-        const SizedBox(width:7),
-        Expanded(child:ledMetric('F.BACK','${feedback.round()}','%',feedback,0,92,(v)=>_changeLive(()=>feedback=v))),
+      const Text('DD-8 • FOUR DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const SizedBox(height:12),
+      Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
+        Expanded(child:roundDial('ECHO',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v))),
+        const SizedBox(width:8),
+        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v))),
       ]),
-      const SizedBox(height:8),
-      Row(children:[
-        Expanded(child:ledMetric('TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>_changeLive(()=>delayTime=v))),
-        const SizedBox(width:7),
-        Expanded(child:modeMetric(onToggle:()=>_changeLive(()=>dual=!dual))),
+      const SizedBox(height:12),
+      Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
+        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>_changeLive(()=>delayTime=v))),
+        const SizedBox(width:8),
+        Expanded(child:roundModeDial()),
       ]),
     ])),
-    noiseControlCard(),
-    box(Column(children:[
-      Row(children:[Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>_changeLive(()=>dual=false))),const SizedBox(width:7),Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>_changeLive(()=>dual=true)))]),
-      const SizedBox(height:8),
-      Row(children:[Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),const SizedBox(width:7),Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass)))]),
+    noiseControlCard(live:true),
+    box(Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
+      Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
+      const SizedBox(width:10),
+      Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass))),
     ])),
     box(Column(children:[
-      const Text('5-BAND EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
+      const Text('5-BAND VOICE EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
       for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>_changeLive(()=>eq[i]=v)),
     ])),
   ]);
 
-    Widget ledMetric(String label,String value,String unit,double current,double min,double max,ValueChanged<double> changed)=>Container(
-    padding:const EdgeInsets.symmetric(horizontal:7,vertical:10),
-    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(20),border:Border.all(color:green.withOpacity(.95),width:1.5),boxShadow:[BoxShadow(color:green.withOpacity(.18),blurRadius:10)]),
-    child:Column(children:[
-      Text(label,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.8)),
-      const SizedBox(height:4),
-      FittedBox(fit:BoxFit.scaleDown,child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
-        Text(value,style:const TextStyle(fontFamily:'monospace',fontSize:30,fontWeight:FontWeight.w900,color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:12)])),
-        Padding(padding:const EdgeInsets.only(bottom:5,left:3),child:Text(unit,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))),
+  Widget roundDial(String label,double value,double min,double max,String number,String unit,ValueChanged<double> onChanged){
+    final progress=((value-min)/(max-min)).clamp(0.0,1.0).toDouble();
+    return Center(child:GestureDetector(
+      onVerticalDragUpdate:(details)=>onChanged((value-details.delta.dy*(max-min)/150).clamp(min,max).toDouble()),
+      child:SizedBox(width:142,height:142,child:Stack(alignment:Alignment.center,children:[
+        SizedBox(width:132,height:132,child:CircularProgressIndicator(
+          value:progress,strokeWidth:5,backgroundColor:Colors.white12,
+          valueColor:AlwaysStoppedAnimation<Color>(green))),
+        Container(width:116,height:116,decoration:BoxDecoration(
+          shape:BoxShape.circle,
+          gradient:const RadialGradient(colors:[Color(0xFF1A3028),Color(0xFF050B08)]),
+          border:Border.all(color:gold.withOpacity(.75),width:1.4),
+          boxShadow:[BoxShadow(color:green.withOpacity(.20),blurRadius:13)]),
+          child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+            Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.8)),
+            const SizedBox(height:4),
+            FittedBox(child:Text(number,style:const TextStyle(fontFamily:'monospace',fontSize:28,
+              fontWeight:FontWeight.w900,color:Color(0xFF65FF24),
+              shadows:[Shadow(color:green,blurRadius:12)]))),
+            Text(unit,style:const TextStyle(color:gold,fontSize:10,fontWeight:FontWeight.bold)),
+            const SizedBox(height:3),
+            const Text('DRAG',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:1)),
+          ])),
       ])),
-      Slider(value:current.clamp(min,max).toDouble(),min:min,max:max,onChanged:changed),
-    ]),
-  );
-  Widget modeMetric({required VoidCallback onToggle})=>Container(
-    padding:const EdgeInsets.symmetric(horizontal:10,vertical:9),
-    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(20),
-      border:Border.all(color:Colors.lightBlueAccent.withOpacity(.85),width:1.3),
-      boxShadow:[BoxShadow(color:Colors.lightBlueAccent.withOpacity(.16),blurRadius:10)]),
-    child:Column(children:[
-      const Text('MODE',style:TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:1)),
-      const SizedBox(height:2),
-      Text(dual?'02':'01',style:const TextStyle(fontFamily:'monospace',fontSize:30,fontWeight:FontWeight.w900,
-        color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:12)])),
-      SizedBox(width:double.infinity,height:30,child:FilledButton(
-        onPressed:onToggle,
-        style:FilledButton.styleFrom(backgroundColor:dual?Colors.lightBlueAccent:green,foregroundColor:Colors.black,
-          padding:EdgeInsets.zero,shape:const StadiumBorder()),
-        child:Text(dual?'DUAL':'SINGLE',style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900)))),
-    ]),
-  );
-  Widget neonMode(String label,bool active,Color color,VoidCallback fn)=>SizedBox(width:double.infinity,height:54,child:OutlinedButton(
-    onPressed:fn,
-    style:OutlinedButton.styleFrom(backgroundColor:active?color.withOpacity(.2):Colors.black54,foregroundColor:active?color:Colors.white,side:BorderSide(color:active?color:Colors.white30,width:active?2:1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),shadowColor:color,elevation:active?8:0),
-    child:Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,letterSpacing:.7)),
-  ));
-  Widget filePage()=>scroll([
-    title('PICK FILE • AUDIO EDITOR','Upload, edit, audition effects, play/pause and save.'),
-    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      const Icon(Icons.audio_file,color:gold,size:42),
-      Text(selected?.path.split('/').last??'NO FILE SELECTED',textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900)),
-      const SizedBox(height:6),
-      Text('FILE LENGTH  ${_time(fileDuration)}',textAlign:TextAlign.center,style:const TextStyle(color:green,fontFamily:'monospace',fontSize:18,fontWeight:FontWeight.w900)),
-      const SizedBox(height:8),
-      action(Icons.folder_open,'PICK AUDIO FILE',()=>chooseAudio()),
-      const SizedBox(height:8),
-      Row(children:[
-        Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),
-        const SizedBox(width:5),
-        Expanded(child:outlined(playbackPaused?Icons.play_arrow:Icons.pause,playbackPaused?'RESUME':'PAUSE',togglePause)),
-        const SizedBox(width:5),
-        Expanded(child:outlined(Icons.stop,'STOP',stop)),
-      ]),
-      Slider(value:fileDuration.inMilliseconds<=0?0:filePosition.inMilliseconds.clamp(0,fileDuration.inMilliseconds).toDouble(),min:0,max:fileDuration.inMilliseconds<=0?1:fileDuration.inMilliseconds.toDouble(),onChanged:fileDuration==Duration.zero?null:(v)=>player.seek(Duration(milliseconds:v.round()))),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(_time(filePosition),style:const TextStyle(color:gold,fontFamily:'monospace')),Text(_time(fileDuration),style:const TextStyle(color:Colors.white60,fontFamily:'monospace'))]),
-      sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
-    ])),
-    box(Column(children:[
-      const Text('DIGITAL DELAY • EFFECT CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
-      slider('ECHO',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
-      slider('F.BACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
-      slider('TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
-      modeMetric(onToggle:()=>setState(()=>dual=!dual)),
-      const SizedBox(height:6),
-      Row(children:[Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),const SizedBox(width:6),Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass)))]),
-    ])),
-    noiseControlCard(),
-    box(Column(children:[
-      const Text('5-BAND EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
-      for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>setState(()=>eq[i]=v)),
-    ])),
-    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      FilledButton.icon(onPressed:working||selected==null?null:auditionEffect,icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.headphones),label:Text(working?'PROCESSING...':'AUDITION CURRENT EFFECT')),
-      const SizedBox(height:7),
-      outlined(Icons.play_circle,'PLAY PROCESSED FILE',()=>play(processed)),
-      outlined(Icons.share,'SHARE / EXPORT PROCESSED WAV',()=>shareFile(processed)),
-      if(processed!=null)Text('Output: ${processed!.path.split('/').last}',style:const TextStyle(color:green,fontSize:10)),
-    ])),
-    const Text('MP3 / AAC / M4A / OGG aur WAV files ko pehle device decoder se PCM WAV mein convert karke effect apply kiya jata hai. Kuch unsupported ya DRM-protected files decode nahi hongi.',style:TextStyle(color:Colors.orangeAccent,fontSize:10)),
-  ]);
+    ));
+  }
 
-    Widget eqPage()=>scroll([
-    title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
-    box(Column(children:[
-      Row(children:[Expanded(child:mode('FLAT',eqPreset=='FLAT',()=>_changeLive((){eq.fillRange(0,5,0);eqPreset='FLAT';}))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',eqPreset=='NAAT VOICE',()=>_changeLive((){eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;eqPreset='NAAT VOICE';})))]),
-      slider('BASS • 100 Hz',eq[0],-12,12,'${eq[0].round()} dB',(v)=>_changeLive(() {eq[0]=v;eqPreset='CUSTOM';})),
-      slider('LOW MID • 350 Hz',eq[1],-12,12,'${eq[1].round()} dB',(v)=>_changeLive(() {eq[1]=v;eqPreset='CUSTOM';})),
-      slider('MID • 1 kHz',eq[2],-12,12,'${eq[2].round()} dB',(v)=>_changeLive(() {eq[2]=v;eqPreset='CUSTOM';})),
-      slider('HIGH MID • 3.5 kHz',eq[3],-12,12,'${eq[3].round()} dB',(v)=>_changeLive(() {eq[3]=v;eqPreset='CUSTOM';})),
-      slider('TREBLE • 9 kHz',eq[4],-12,12,'${eq[4].round()} dB',(v)=>_changeLive(() {eq[4]=v;eqPreset='CUSTOM';})),
-      Row(children:[Expanded(child:mode('BASS BOOST',eqPreset=='BASS BOOST',()=>_changeLive((){eq[0]=8;eq[1]=3;eqPreset='BASS BOOST';}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',eqPreset=='CLEAR VOCAL',()=>_changeLive((){eq[2]=3;eq[3]=6;eq[4]=3;eqPreset='CLEAR VOCAL';})))]),
-      const SizedBox(height:8),const Text('EQ values are used by PROCESS & SAVE ECHO on the File Echo or Record tab.',style:TextStyle(color:Colors.white60,fontSize:10)),
-    ])),
-    FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('GO TO FILE ECHO')),
-  ]);
-  Widget recordPage()=>scroll([
-    title('LIVE MIC & RECORDING','Mic noise reduction, noise gate, live echo and recording.'),
-    noiseControlCard(),
-    box(Column(children:[
-      Icon(recording?Icons.fiber_manual_record:Icons.mic,size:64,color:recording?Colors.redAccent:gold),
-      Text(recording?'RECORDING NOW':'MICROPHONE READY',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1)),
-      const SizedBox(height:12),
-      SizedBox(width:double.infinity,child:OutlinedButton.icon(
-        onPressed:recording?null:toggleLiveMonitor,
-        icon:Icon(liveMonitoring?Icons.stop_circle:Icons.hearing),
-        label:Text(liveMonitoring?'STOP LIVE MIC EFFECT':'START LIVE MIC EFFECT'),
-      )),
-      const SizedBox(height:8),
-      SizedBox(width:double.infinity,child:FilledButton.icon(
-        style:FilledButton.styleFrom(backgroundColor:recording?Colors.red.shade700:green,foregroundColor:Colors.black),
-        onPressed:recording?stopRecording:() async {if(liveMonitoring) await toggleLiveMonitor(); await startRecording();},
-        icon:Icon(recording?Icons.stop:Icons.fiber_manual_record),label:Text(recording?'STOP & SAVE RECORDING':'START RECORDING'))),
-      const SizedBox(height:8),Text(recorded?.path.split('/').last??'No recording saved yet',style:const TextStyle(color:Colors.white60,fontSize:11)),
-      Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY RECORDING',()=>play(recorded))),const SizedBox(width:7),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
-      FilledButton.icon(onPressed:working||recorded==null?null:()=>process(recorded),icon:const Icon(Icons.graphic_eq),label:const Text('PROCESS RECORDING WITH EFFECTS')),
-      outlined(Icons.share,'SHARE PROCESSED RECORDING',()=>shareFile(processed)),
-    ])),
-    const Text('Mic noise reduction uses speech filtering and a noise gate. It reduces background noise; it is not the same as hardware ANC in headphones.',style:TextStyle(color:Colors.white54,fontSize:10)),
-  ]);
+  Widget roundModeDial(){
+    final name=delayModeNames[delayMode];
+    return Center(child:GestureDetector(
+      onTap:()=>_changeLive(()=>{delayMode=(delayMode+1)%delayModeNames.length,dual=delayMode==5}),
+      onVerticalDragUpdate:(details){
+        if(details.delta.dy.abs()>2){
+          final step=details.delta.dy>0?1:-1;
+          _changeLive(()=>{delayMode=(delayMode+step+delayModeNames.length)%delayModeNames.length,dual=delayMode==5});
+        }
+      },
+      child:Container(width:132,height:132,decoration:BoxDecoration(
+        shape:BoxShape.circle,gradient:const RadialGradient(colors:[Color(0xFF243B34),Color(0xFF050B08)]),
+        border:Border.all(color:Colors.lightBlueAccent,width:2),
+        boxShadow:[BoxShadow(color:Colors.lightBlueAccent.withOpacity(.20),blurRadius:14)]),
+        child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+          const Text('MODE',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:1)),
+          const SizedBox(height:4),
+          Text((delayMode+1).toString().padLeft(2,'0'),style:const TextStyle(fontFamily:'monospace',
+            fontSize:29,fontWeight:FontWeight.w900,color:Color(0xFF65FF24),
+            shadows:[Shadow(color:green,blurRadius:12)])),
+          Text(name,style:const TextStyle(color:gold,fontSize:9,fontWeight:FontWeight.w900)),
+          const SizedBox(height:3),
+          const Text('TAP / DRAG',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:.7)),
+        ]),
+      ),
+    ));
+  }
+
+  Widget roundToggle(String label,bool active,Color color,VoidCallback onTap)=>GestureDetector(
+    onTap:onTap,
+    child:Container(height:92,decoration:BoxDecoration(
+      color:active?color.withOpacity(.18):const Color(0xFF09130F),
+      borderRadius:BorderRadius.circular(46),
+      border:Border.all(color:active?color:Colors.white24,width:active?2:1),
+      boxShadow:active?[BoxShadow(color:color.withOpacity(.22),blurRadius:12)]:[]),
+      child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+        Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,letterSpacing:.6)),
+        const SizedBox(height:3),
+        Text(active?'ON':'OFF',style:TextStyle(fontFamily:'monospace',fontSize:22,
+          fontWeight:FontWeight.w900,color:active?color:Colors.white54)),
+      ]),
+    ),
+  );
+
   Widget noiseControlCard()=>box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     const Row(children:[Icon(Icons.graphic_eq,color:green,size:25),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.7))]),
     const SizedBox(height:5),
