@@ -150,23 +150,84 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(17),border:Border.all(color:Colors.white.withOpacity(.13))),child:c);
   Widget delayPage()=>scroll([
-    title('DIGITAL DELAY','Controls are applied when processing an audio file or recording.'),
+    Padding(padding:const EdgeInsets.only(bottom:12),child:Column(children:[
+      const Text('👑 DDM-MAX',style:TextStyle(fontSize:28,fontWeight:FontWeight.w900,color:gold,letterSpacing:2,shadows:[Shadow(color:green,blurRadius:14)])),
+      const Text('DIGITAL DELAY • NAAT AUDIO SYSTEM',style:TextStyle(fontSize:10,color:Colors.white,letterSpacing:1.4)),
+      const SizedBox(height:4),Text('POWERED BY IDRISH',style:TextStyle(fontSize:9,color:gold.withOpacity(.9),letterSpacing:2)),
+    ])),
+    box(Column(children:[
+      Row(children:[
+        Expanded(child:ledMetric('DELAY TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>setState(()=>delayTime=v))),
+        const SizedBox(width:7),
+        Expanded(child:ledMetric('FEEDBACK','${feedback.round()}','%',feedback,0,92,(v)=>setState(()=>feedback=v))),
+      ]),
+      const SizedBox(height:8),
+      Row(children:[
+        Expanded(child:ledMetric('LEVEL','${level.round()}','%',level,0,100,(v)=>setState(()=>level=v))),
+        const SizedBox(width:7),
+        Expanded(child:ledMetric('MIX','${mix.round()}','%',mix,0,100,(v)=>setState(()=>mix=v))),
+      ]),
+    ])),
     noiseControlCard(),
     box(Column(children:[
-      Row(children:[Expanded(child:mode('SINGLE DELAY',!dual,()=>setState(()=>dual=false))),const SizedBox(width:8),Expanded(child:mode('DUAL DELAY',dual,()=>setState(()=>dual=true)))]),
-      Row(children:[Expanded(child:sw('PING-PONG',pingPong,(v)=>setState(()=>pingPong=v))),Expanded(child:sw('BYPASS',bypass,(v)=>setState(()=>bypass=v)))]),
-      slider('LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
-      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
-      slider('TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
-      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
+      Row(children:[
+        Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>setState(()=>dual=false))),
+        const SizedBox(width:7),
+        Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>setState(()=>dual=true))),
+      ]),
+      const SizedBox(height:8),
+      Row(children:[
+        Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),
+        const SizedBox(width:7),
+        Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass))),
+      ]),
     ])),
-    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      const Text('PROCESS SOURCE AUDIO',style:TextStyle(color:gold,fontWeight:FontWeight.bold)),
-      const SizedBox(height:8),Text(selected?.path.split('/').last??'No source selected',style:const TextStyle(color:Colors.white70)),
-      FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('OPEN FILE ECHO')),
-      OutlinedButton.icon(onPressed:()=>setState(()=>tab=3),icon:const Icon(Icons.mic),label:const Text('OPEN LIVE MIC / RECORD')),
+    box(Column(children:[
+      const Text('AUDIO LEVEL',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:1.5,color:Colors.white)),
+      const SizedBox(height:8),
+      ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:level/100,minHeight:17,backgroundColor:Colors.black, valueColor:const AlwaysStoppedAnimation<Color>(green))),
+      const SizedBox(height:5),
+      Align(alignment:Alignment.centerRight,child:Text('${level.round()}%',style:const TextStyle(color:green,fontSize:20,fontWeight:FontWeight.w900))),
     ])),
+    box(Column(children:[
+      Row(children:[
+        Expanded(child:action(Icons.mic,'LIVE MIC',()=>setState(()=>tab=3))),
+        const SizedBox(width:7),
+        Expanded(child:action(Icons.audio_file,'FILE ECHO',()=>setState(()=>tab=1))),
+      ]),
+      const SizedBox(height:7),
+      Row(children:[
+        Expanded(child:action(Icons.tune,'5 BAND EQ',()=>setState(()=>tab=2))),
+        const SizedBox(width:7),
+        Expanded(child:action(Icons.fiber_manual_record,'RECORD',()=>setState(()=>tab=3))),
+      ]),
+      const SizedBox(height:7),
+      Row(children:[
+        Expanded(child:action(Icons.library_music,'NAAT COLLECTION',()=>setState(()=>tab=4))),
+        const SizedBox(width:7),
+        Expanded(child:action(Icons.settings,'SETTINGS',()=>setState(()=>tab=5))),
+      ]),
+    ])),
+    const Padding(padding:EdgeInsets.only(bottom:8),child:Text('DDM-MAX  •  DIGITAL AUDIO CONSOLE',textAlign:TextAlign.center,style:TextStyle(color:gold,fontWeight:FontWeight.bold,letterSpacing:1.2))),
   ]);
+  Widget ledMetric(String label,String value,String unit,double current,double min,double max,ValueChanged<double> changed)=>Container(
+    padding:const EdgeInsets.symmetric(horizontal:7,vertical:10),
+    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(14),border:Border.all(color:green.withOpacity(.85),width:1.3),boxShadow:[BoxShadow(color:green.withOpacity(.18),blurRadius:10)]),
+    child:Column(children:[
+      Text(label,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.8)),
+      const SizedBox(height:4),
+      FittedBox(fit:BoxFit.scaleDown,child:Row(crossAxisAlignment:CrossAxisAlignment.end,children:[
+        Text(value,style:const TextStyle(fontFamily:'monospace',fontSize:30,fontWeight:FontWeight.w900,color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:12)])),
+        Padding(padding:const EdgeInsets.only(bottom:5,left:3),child:Text(unit,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.bold))),
+      ])),
+      Slider(value:current.clamp(min,max).toDouble(),min:min,max:max,onChanged:changed),
+    ]),
+  );
+  Widget neonMode(String label,bool active,Color color,VoidCallback fn)=>SizedBox(width:double.infinity,height:54,child:OutlinedButton(
+    onPressed:fn,
+    style:OutlinedButton.styleFrom(backgroundColor:active?color.withOpacity(.2):Colors.black54,foregroundColor:active?color:Colors.white,side:BorderSide(color:active?color:Colors.white30,width:active?2:1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(13)),shadowColor:color,elevation:active?8:0),
+    child:Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,letterSpacing:.7)),
+  ));
   Widget filePage()=>scroll([
     title('FILE ECHO','Select audio, clean mic noise, process and save/share WAV output.'),
     noiseControlCard(),
@@ -228,12 +289,12 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     const Text('Mic noise reduction uses speech filtering and a noise gate. It reduces background noise; it is not the same as hardware ANC in headphones.',style:TextStyle(color:Colors.white54,fontSize:10)),
   ]);
   Widget noiseControlCard()=>box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    const Row(children:[Icon(Icons.spatial_audio_off,color:gold),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.bold))]),
+    const Row(children:[Icon(Icons.graphic_eq,color:green,size:25),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.7))]),
     const SizedBox(height:5),
     sw('ANC / NOISE REDUCTION',noiseReduction,(v)=>setState(()=>noiseReduction=v)),
     slider('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}%',(v)=>setState(()=>ancLevel=v)),
     sw('NOISE GATE',noiseGate,(v)=>setState(()=>noiseGate=v)),
-    const Text('Level 0–100% controls noise reduction strength. This is software mic noise reduction, not headphone hardware ANC.',style:TextStyle(color:Colors.white60,fontSize:10)),
+    const Text('Software mic noise reduction • 0–100%',style:TextStyle(color:Colors.white60,fontSize:10)),
   ]));
   Widget libraryPage()=>scroll([
     title('NAAT COLLECTION','Add audio tracks from your phone and play them here.'),
