@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -30,6 +31,8 @@ class ConsoleHome extends StatefulWidget {
 }
 class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
+  Duration fileDuration=Duration.zero, filePosition=Duration.zero;
+  bool playbackPaused=false;
   double level=80,feedback=38,delayTime=320,mix=45;
   final List<double> eq=[0,0,0,0,0];
   String eqPreset='FLAT';
@@ -43,7 +46,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   double playbackVolume=1.0,ancLevel=65;
   String? recordingPath;
 
-  @override void initState(){super.initState();_loadLibrary();}
+  @override void initState(){super.initState();_loadLibrary(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st!=PlayerState.playing);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
   Future<void> _loadLibrary() async {
     final prefs=await SharedPreferences.getInstance();
     final paths=prefs.getStringList('ddm_naat_library')??[];
@@ -71,7 +74,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         note('Phone se file ka path nahi mila. Dobara file select karo.');
         return;
       }
-      setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;}});
+      setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;fileDuration=Duration.zero;filePosition=Duration.zero;}});
+      if(!forLibrary){try{await player.stop();await player.setSource(DeviceFileSource(f.path));fileDuration=await player.getDuration()??Duration.zero;}catch(_){} if(mounted)setState((){});}
       if(forLibrary){final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());}
       note('Audio file select ho gayi.');
     }catch(e){note('File select error: $e');}
@@ -81,6 +85,10 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     try{await player.stop();await player.setVolume(playbackVolume);await player.setReleaseMode(loop?ReleaseMode.loop:ReleaseMode.release);await player.play(DeviceFileSource(f.path));}
     catch(e){note('Play error: $e');}
   }
+  Future<void> togglePause() async {try {if(player.state==PlayerState.playing){await player.pause();}else{await player.resume();}}catch(e){note('Playback control error: $e');}}
+  String _time(Duration d){final m=d.inMinutes.remainder(60).toString().padLeft(2,'0');final sec=d.inSeconds.remainder(60).toString().padLeft(2,'0');final h=d.inHours;return h>0?'$h:$m:$sec':'$m:$sec';}
+  Future<void> auditionEffect() async {await process(selected);if(processed!=null)await play(processed);}
+
   Future<void> stop() async {await player.stop();}
   Future<void> process(File? source) async {
     if(source==null){note('Pehle audio file select ya record karo.');return;}
@@ -152,7 +160,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     catch(e){note('Book open error: $e');}
   }
   @override Widget build(BuildContext context){
-    final pages=[delayPage(),filePage(),eqPage(),recordPage(),libraryPage(),settingsPage()];
+    final pages=[delayPage(),filePage()];
     return Scaffold(
       body:Stack(fit:StackFit.expand,children:[
         Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF07110E))),
@@ -162,12 +170,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
         backgroundColor:const Color(0xFF0B1713),indicatorColor:green.withOpacity(.22),
         destinations:const[
-          NavigationDestination(icon:Icon(Icons.graphic_eq),label:'Delay'),
-          NavigationDestination(icon:Icon(Icons.audio_file),label:'File Echo'),
-          NavigationDestination(icon:Icon(Icons.tune),label:'EQ'),
-          NavigationDestination(icon:Icon(Icons.mic),label:'Record'),
-          NavigationDestination(icon:Icon(Icons.library_music),label:'Naat'),
-          NavigationDestination(icon:Icon(Icons.settings),label:'Settings'),
+          NavigationDestination(icon:Icon(Icons.mic),label:'LIVE MIC'),
+          NavigationDestination(icon:Icon(Icons.audio_file),label:'PICK FILE'),
         ]),
     );
   }
@@ -186,10 +190,12 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(17),border:Border.all(color:Colors.white.withOpacity(.13))),child:c);
   Widget delayPage()=>scroll([
-    Padding(padding:const EdgeInsets.only(bottom:12),child:Column(children:[
-      const Text('👑 DDM-MAX',style:TextStyle(fontSize:28,fontWeight:FontWeight.w900,color:gold,letterSpacing:2,shadows:[Shadow(color:green,blurRadius:14)])),
-      const Text('DIGITAL DELAY • NAAT AUDIO SYSTEM',style:TextStyle(fontSize:10,color:Colors.white,letterSpacing:1.4)),
-      const SizedBox(height:4),Text('POWERED BY IDRISH',style:TextStyle(fontSize:9,color:gold.withOpacity(.9),letterSpacing:2)),
+    title('LIVE MIC','Real-time digital delay • headphones recommended'),
+    box(Column(children:[
+      const Icon(Icons.mic,color:gold,size:42),
+      Text(liveMonitoring?'LIVE EFFECT RUNNING':'MICROPHONE STANDBY',style:TextStyle(color:liveMonitoring?green:gold,fontWeight:FontWeight.w900,letterSpacing:1.2)),
+      const SizedBox(height:10),
+      SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:toggleLiveMonitor,icon:Icon(liveMonitoring?Icons.stop_circle:Icons.play_circle_fill),label:Text(liveMonitoring?'STOP LIVE MIC':'START LIVE MIC'),style:FilledButton.styleFrom(backgroundColor:liveMonitoring?Colors.redAccent:green,foregroundColor:Colors.black,padding:const EdgeInsets.symmetric(vertical:15)))),
     ])),
     box(Column(children:[
       Row(children:[
@@ -206,47 +212,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ])),
     noiseControlCard(),
     box(Column(children:[
-      Row(children:[
-        Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>_changeLive(()=>dual=false))),
-        const SizedBox(width:7),
-        Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>_changeLive(()=>dual=true))),
-      ]),
+      Row(children:[Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>_changeLive(()=>dual=false))),const SizedBox(width:7),Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>_changeLive(()=>dual=true)))]),
       const SizedBox(height:8),
-      Row(children:[
-        Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
-        const SizedBox(width:7),
-        Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass))),
-      ]),
+      Row(children:[Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),const SizedBox(width:7),Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass)))]),
     ])),
     box(Column(children:[
-      const Text('AUDIO LEVEL',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:1.5,color:Colors.white)),
-      const SizedBox(height:8),
-      ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:level/100,minHeight:17,backgroundColor:Colors.black, valueColor:const AlwaysStoppedAnimation<Color>(green))),
-      const SizedBox(height:5),
-      Align(alignment:Alignment.centerRight,child:Text('${level.round()}%',style:const TextStyle(color:green,fontSize:20,fontWeight:FontWeight.w900))),
+      const Text('5-BAND EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
+      for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>_changeLive(()=>eq[i]=v)),
     ])),
-    box(Column(children:[
-      Row(children:[
-        Expanded(child:action(Icons.mic,'LIVE MIC',()=>setState(()=>tab=3))),
-        const SizedBox(width:7),
-        Expanded(child:action(Icons.audio_file,'FILE ECHO',()=>setState(()=>tab=1))),
-      ]),
-      const SizedBox(height:7),
-      Row(children:[
-        Expanded(child:action(Icons.tune,'5 BAND EQ',()=>setState(()=>tab=2))),
-        const SizedBox(width:7),
-        Expanded(child:action(Icons.fiber_manual_record,'RECORD',()=>setState(()=>tab=3))),
-      ]),
-      const SizedBox(height:7),
-      Row(children:[
-        Expanded(child:action(Icons.library_music,'NAAT COLLECTION',()=>setState(()=>tab=4))),
-        const SizedBox(width:7),
-        Expanded(child:action(Icons.settings,'SETTINGS',()=>setState(()=>tab=5))),
-      ]),
-    ])),
-    const Padding(padding:EdgeInsets.only(bottom:8),child:Text('DDM-MAX  •  DIGITAL AUDIO CONSOLE',textAlign:TextAlign.center,style:TextStyle(color:gold,fontWeight:FontWeight.bold,letterSpacing:1.2))),
   ]);
-  Widget ledMetric(String label,String value,String unit,double current,double min,double max,ValueChanged<double> changed)=>Container(
+
+    Widget ledMetric(String label,String value,String unit,double current,double min,double max,ValueChanged<double> changed)=>Container(
     padding:const EdgeInsets.symmetric(horizontal:7,vertical:10),
     decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(14),border:Border.all(color:green.withOpacity(.85),width:1.3),boxShadow:[BoxShadow(color:green.withOpacity(.18),blurRadius:10)]),
     child:Column(children:[
@@ -265,28 +241,53 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     child:Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,letterSpacing:.7)),
   ));
   Widget filePage()=>scroll([
-    title('FILE ECHO','Select audio, clean mic noise, process and save/share WAV output.'),
-    noiseControlCard(),
-    box(Column(children:[
-      const Icon(Icons.audio_file,size:48,color:gold),const SizedBox(height:8),
-      Text(selected?.path.split('/').last??'NO AUDIO SELECTED',textAlign:TextAlign.center),
-      const SizedBox(height:8),action(Icons.folder_open,'CHOOSE AUDIO FILE',()=>chooseAudio()),
-      const SizedBox(height:8),sw('REPEAT / LOOP PLAYBACK',loop,(v)=>setState(()=>loop=v)),
-      Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),const SizedBox(width:8),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
+    title('PICK FILE • AUDIO EDITOR','Upload, edit, audition effects, play/pause and save.'),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Icon(Icons.audio_file,color:gold,size:42),
+      Text(selected?.path.split('/').last??'NO FILE SELECTED',textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900)),
+      const SizedBox(height:6),
+      Text('FILE LENGTH  ${_time(fileDuration)}',textAlign:TextAlign.center,style:const TextStyle(color:green,fontFamily:'monospace',fontSize:18,fontWeight:FontWeight.w900)),
+      const SizedBox(height:8),
+      action(Icons.folder_open,'PICK AUDIO FILE',()=>chooseAudio()),
+      const SizedBox(height:8),
+      Row(children:[
+        Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),
+        const SizedBox(width:5),
+        Expanded(child:outlined(playbackPaused?Icons.play_arrow:Icons.pause,playbackPaused?'RESUME':'PAUSE',togglePause)),
+        const SizedBox(width:5),
+        Expanded(child:outlined(Icons.stop,'STOP',stop)),
+      ]),
+      Slider(value:fileDuration.inMilliseconds<=0?0:filePosition.inMilliseconds.clamp(0,fileDuration.inMilliseconds).toDouble(),min:0,max:fileDuration.inMilliseconds<=0?1:fileDuration.inMilliseconds.toDouble(),onChanged:fileDuration==Duration.zero?null:(v)=>player.seek(Duration(milliseconds:v.round()))),
+      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(_time(filePosition),style:const TextStyle(color:gold,fontFamily:'monospace')),Text(_time(fileDuration),style:const TextStyle(color:Colors.white60,fontFamily:'monospace'))]),
+      sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
     ])),
     box(Column(children:[
-      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>_changeLive(()=>delayTime=v)),
-      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>_changeLive(()=>feedback=v)),
-      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>_changeLive(()=>mix=v)),
-      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>_changeLive(()=>level=v)),
-      FilledButton.icon(onPressed:working?null:()=>process(selected),icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.auto_awesome),label:Text(working?'PROCESSING...':'PROCESS & SAVE ECHO')),
-      const SizedBox(height:7),outlined(Icons.play_circle,'PLAY PROCESSED',()=>play(processed)),
-      outlined(Icons.share,'SHARE / EXPORT WAV',()=>shareFile(processed)),
-      if(processed!=null)Text('Saved: ${processed!.path}',style:const TextStyle(color:green,fontSize:10)),
+      const Text('DIGITAL DELAY • EFFECT CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
+      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
+      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
+      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
+      Row(children:[Expanded(child:neonMode('SINGLE',!dual,green,()=>setState(()=>dual=false))),const SizedBox(width:6),Expanded(child:neonMode('DUAL',dual,Colors.lightBlueAccent,()=>setState(()=>dual=true)))]),
+      const SizedBox(height:6),
+      Row(children:[Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),const SizedBox(width:6),Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass)))]),
     ])),
-    const Text('Audio playback: phone-supported formats. Echo processing: PCM 16-bit mono/stereo WAV only; other formats must be converted to WAV first.',style:TextStyle(color:Colors.white54,fontSize:10)),
+    box(Column(children:[
+      const Text('5-BAND EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
+      for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>setState(()=>eq[i]=v)),
+      sw('NOISE REDUCTION FILTER',noiseReduction,(v)=>setState(()=>noiseReduction=v)),
+      sw('NOISE GATE',noiseGate,(v)=>setState(()=>noiseGate=v)),
+    ])),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      FilledButton.icon(onPressed:working||selected==null?null:auditionEffect,icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.headphones),label:Text(working?'PROCESSING...':'AUDITION CURRENT EFFECT')),
+      const SizedBox(height:7),
+      outlined(Icons.play_circle,'PLAY PROCESSED FILE',()=>play(processed)),
+      outlined(Icons.share,'SHARE / EXPORT PROCESSED WAV',()=>shareFile(processed)),
+      if(processed!=null)Text('Output: ${processed!.path.split('/').last}',style:const TextStyle(color:green,fontSize:10)),
+    ])),
+    const Text('Effect processing currently supports PCM 16-bit mono/stereo WAV. Other formats may play, but must be converted to WAV before applying effects.',style:TextStyle(color:Colors.orangeAccent,fontSize:10)),
   ]);
-  Widget eqPage()=>scroll([
+
+    Widget eqPage()=>scroll([
     title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
     box(Column(children:[
       Row(children:[Expanded(child:mode('FLAT',eqPreset=='FLAT',()=>_changeLive((){eq.fillRange(0,5,0);eqPreset='FLAT';}))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',eqPreset=='NAAT VOICE',()=>_changeLive((){eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;eqPreset='NAAT VOICE';})))]),
