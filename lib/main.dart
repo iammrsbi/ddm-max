@@ -137,7 +137,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('BEFORE / AFTER', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1)),
       const SizedBox(height: 12),
-      const Row(children: [Expanded(child: _compare('BEFORE', 'Original audio')), SizedBox(width: 8), Expanded(child: _compare('AFTER', 'Echo effect'))]),
+      Row(children: [Expanded(child: _compare('BEFORE', 'Original audio')), const SizedBox(width: 8), Expanded(child: _compare('AFTER', 'Echo effect'))]),
     ])),
   ]);
 
