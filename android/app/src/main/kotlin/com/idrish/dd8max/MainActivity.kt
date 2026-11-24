@@ -3,11 +3,12 @@ package com.idrish.dd8max
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodCall
 
 class MainActivity : FlutterActivity() {
     private val liveAudioEngine = LiveAudioEngine()
 
-    private fun applyAudioSettings(call: MethodChannel.MethodCall) {
+    private fun applyAudioSettings(call: MethodCall) {
         liveAudioEngine.update(
             call.argument<Int>("delayMs") ?: 320,
             call.argument<Double>("feedback") ?: 0.38,
