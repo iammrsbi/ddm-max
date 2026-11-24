@@ -13,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
-const green = Color(0xFF20C878), gold = Color(0xFFFFC857), panel = Color(0xDD101B18);
+const green = Color(0xFF20C878), gold = Color(0xFFFFC857), panel = Color(0xA5101B18);
 
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
@@ -482,11 +482,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         Expanded(child:roundDial('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}','%',(v)=>update(()=>ancLevel=v))),
       ]),
       const SizedBox(height:7),
-      Row(children:[
-        const Expanded(child:Text('NOISE GATE',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900))),
-        Switch(value:noiseGate,activeColor:green,onChanged:(v)=>update(()=>noiseGate=v)),
-      ]),
-      const Text('Android NoiseSuppressor (if available) + speech filtering + adaptive gate.',
+      roundToggle('NOISE GATE',noiseGate,Colors.orangeAccent,()=>update(()=>noiseGate=!noiseGate)),
+      const SizedBox(height:6),
+      const Text('Ping-Pong = stereo echo jo left aur right speaker mein baari-baari aata hai. Android NoiseSuppressor bhi available ho to ANC ke saath chalega.',
         style:TextStyle(color:Colors.white60,fontSize:9)),
     ]));
   }
