@@ -16,7 +16,10 @@ class MainActivity : FlutterActivity() {
                             call.argument<Int>("delayMs") ?: 320,
                             call.argument<Double>("feedback") ?: 0.38,
                             call.argument<Double>("mix") ?: 0.45,
-                            call.argument<Double>("level") ?: 0.8
+                            call.argument<Double>("level") ?: 0.8,
+                            call.argument<Boolean>("noiseReduction") ?: true,
+                            call.argument<Boolean>("noiseGate") ?: true,
+                            call.argument<Double>("ancLevel") ?: 0.65
                         )
                         result.success(true)
                     } catch (e: Exception) { result.error("LIVE_AUDIO_START", e.message, null) }

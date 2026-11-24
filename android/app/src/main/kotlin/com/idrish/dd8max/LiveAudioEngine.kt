@@ -13,7 +13,7 @@ class LiveAudioEngine {
     private var track: AudioTrack? = null
     private var worker: Thread? = null
 
-    @Synchronized fun start(delayMs: Int, feedback: Double, mix: Double, level: Double) {
+    @Synchronized fun start(delayMs: Int, feedback: Double, mix: Double, level: Double, noiseReduction: Boolean, noiseGate: Boolean, ancLevel: Double) {
         stop()
         val rate = 44100
         val minIn = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -35,12 +35,24 @@ class LiveAudioEngine {
         running = true
         input.startRecording(); output.play()
         worker = Thread {
-            val ins = ShortArray(512); val outs = ShortArray(512); var cursor = 0
+            val ins = ShortArray(512); val outs = ShortArray(512); var cursor = 0; var previousInput = 0.0f; var previousHigh = 0.0f
             while (running) {
                 val count = input.read(ins,0,ins.size)
                 if (count <= 0) continue
                 for (i in 0 until count) {
-                    val dry = ins[i] / 32768.0f
+                    val raw = ins[i] / 32768.0f
+                    val high = if (noiseReduction) {
+                        val filtered = 0.995f * (previousHigh + raw - previousInput)
+                        previousInput = raw
+                        previousHigh = filtered
+                        filtered
+                    } else raw
+                    val strength = ancLevel.coerceIn(0.0, 1.0).toFloat()
+                    val cleaned = raw * (1.0f - strength) + high * strength
+                    val magnitude = kotlin.math.abs(cleaned)
+                    val threshold = 0.004f + 0.018f * strength
+                    val gate = if (!noiseGate) 1.0f else if (magnitude < threshold) 0.10f else if (magnitude < threshold * 2.2f) 0.10f + (magnitude - threshold) / (threshold * 1.2f) * 0.90f else 1.0f
+                    val dry = cleaned * gate
                     val echo = ring[cursor]
                     ring[cursor] = (dry + echo * fb).coerceIn(-1.0f,1.0f)
                     val mixed = ((dry * (1.0f-wet)) + ((dry+echo)*wet))*gain

@@ -32,12 +32,13 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   double level=80,feedback=38,delayTime=320,mix=45;
   final List<double> eq=[0,0,0,0,0];
   bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false,liveMonitoring=false;
+  bool noiseReduction=true,noiseGate=true;
   static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
   File? selected,processed,recorded;
   List<File> library=[];
-  double playbackVolume=1.0;
+  double playbackVolume=1.0,ancLevel=65;
   String? recordingPath;
 
   @override void initState(){super.initState();_loadLibrary();}
@@ -72,7 +73,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       final d=await getApplicationDocumentsDirectory();
       final out=await WavEchoEngine.render(input:source,outputDirectory:Directory('${d.path}/DDM-MAX'),
         delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
-        eq:eq,pingPong:pingPong,dual:dual,bypass:bypass);
+        eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
       if(!mounted)return;
       setState(()=>processed=out);note('Processed WAV save ho gayi.');
     }catch(e){note('Processing error: $e');}
@@ -88,7 +89,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       }
       final permission=await Permission.microphone.request();
       if(!permission.isGranted){note('Microphone permission allow karo.');return;}
-      await liveChannel.invokeMethod('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100});
+      await liveChannel.invokeMethod('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100});
       if(mounted)setState(()=>liveMonitoring=true);
       note('Live mic delay chalu. Headphones use karo.');
     } catch(e) { note('Live mic start nahi hua: $e'); }
@@ -150,6 +151,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(17),border:Border.all(color:Colors.white.withOpacity(.13))),child:c);
   Widget delayPage()=>scroll([
     title('DIGITAL DELAY','Controls are applied when processing an audio file or recording.'),
+    noiseControlCard(),
     box(Column(children:[
       Row(children:[Expanded(child:mode('SINGLE DELAY',!dual,()=>setState(()=>dual=false))),const SizedBox(width:8),Expanded(child:mode('DUAL DELAY',dual,()=>setState(()=>dual=true)))]),
       Row(children:[Expanded(child:sw('PING-PONG',pingPong,(v)=>setState(()=>pingPong=v))),Expanded(child:sw('BYPASS',bypass,(v)=>setState(()=>bypass=v)))]),
@@ -166,7 +168,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ])),
   ]);
   Widget filePage()=>scroll([
-    title('FILE ECHO','Select audio, process effects and save/share WAV output.'),
+    title('FILE ECHO','Select audio, clean mic noise, process and save/share WAV output.'),
+    noiseControlCard(),
     box(Column(children:[
       const Icon(Icons.audio_file,size:48,color:gold),const SizedBox(height:8),
       Text(selected?.path.split('/').last??'NO AUDIO SELECTED',textAlign:TextAlign.center),
@@ -201,7 +204,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('GO TO FILE ECHO')),
   ]);
   Widget recordPage()=>scroll([
-    title('LIVE MIC & RECORDING','Record from phone microphone, then process with delay and EQ.'),
+    title('LIVE MIC & RECORDING','Mic noise reduction, noise gate, live echo and recording.'),
+    noiseControlCard(),
     box(Column(children:[
       Icon(recording?Icons.fiber_manual_record:Icons.mic,size:64,color:recording?Colors.redAccent:gold),
       Text(recording?'RECORDING NOW':'MICROPHONE READY',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1)),
@@ -221,8 +225,16 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       FilledButton.icon(onPressed:working||recorded==null?null:()=>process(recorded),icon:const Icon(Icons.graphic_eq),label:const Text('PROCESS RECORDING WITH EFFECTS')),
       outlined(Icons.share,'SHARE PROCESSED RECORDING',()=>shareFile(processed)),
     ])),
-    const Text('Mic capture and recording are implemented. This version records first and applies effects after recording; realtime zero-latency live echo monitoring is not yet available.',style:TextStyle(color:Colors.white54,fontSize:10)),
+    const Text('Mic noise reduction uses speech filtering and a noise gate. It reduces background noise; it is not the same as hardware ANC in headphones.',style:TextStyle(color:Colors.white54,fontSize:10)),
   ]);
+  Widget noiseControlCard()=>box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+    const Row(children:[Icon(Icons.spatial_audio_off,color:gold),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.bold))]),
+    const SizedBox(height:5),
+    sw('ANC / NOISE REDUCTION',noiseReduction,(v)=>setState(()=>noiseReduction=v)),
+    slider('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}%',(v)=>setState(()=>ancLevel=v)),
+    sw('NOISE GATE',noiseGate,(v)=>setState(()=>noiseGate=v)),
+    const Text('Level 0–100% controls noise reduction strength. This is software mic noise reduction, not headphone hardware ANC.',style:TextStyle(color:Colors.white60,fontSize:10)),
+  ]));
   Widget libraryPage()=>scroll([
     title('NAAT COLLECTION','Add audio tracks from your phone and play them here.'),
     box(Column(children:[

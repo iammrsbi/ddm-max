@@ -14,6 +14,9 @@ class WavEchoEngine {
     bool pingPong = false,
     bool dual = false,
     bool bypass = false,
+    bool noiseReduction = true,
+    bool noiseGate = true,
+    double ancLevel = 0.65,
   }) async {
     final bytes = await input.readAsBytes();
     if (bytes.length < 44 || String.fromCharCodes(bytes.sublist(0, 4)) != 'RIFF' ||
@@ -56,13 +59,32 @@ class WavEchoEngine {
         dry[c][f] = data.getInt16(startData + (f * ch + c) * 2, Endian.little) / 32768.0;
       }
     }
+    final cleaned = List<Float64List>.generate(ch, (c) {
+      final out = Float64List(totalFrames);
+      final strength = ancLevel.clamp(0.0, 1.0).toDouble();
+      final rc = 1.0 / (2.0 * math.pi * 85.0);
+      final dt = 1.0 / rate;
+      final alpha = rc / (rc + dt);
+      double previousInput = 0, previousHigh = 0;
+      for (var i = 0; i < frames; i++) {
+        final x = dry[c][i];
+        final high = noiseReduction ? alpha * (previousHigh + x - previousInput) : x;
+        previousInput = x; previousHigh = high;
+        final filtered = x * (1.0 - strength) + high * strength;
+        final threshold = 0.004 + 0.018 * strength;
+        final magnitude = filtered.abs();
+        final gate = !noiseGate ? 1.0 : (magnitude < threshold ? 0.10 : (magnitude < threshold * 2.2 ? 0.10 + (magnitude - threshold) / (threshold * 1.2) * 0.90 : 1.0));
+        out[i] = filtered * gate;
+      }
+      return out;
+    });
     final filtered = List<Float64List>.generate(ch, (c) {
       final out = Float64List(totalFrames);
       if (bypass) { for (var i=0;i<frames;i++) { out[i]=dry[c][i]; } return out; }
       final centers = [100.0, 350.0, 1000.0, 3500.0, 9000.0];
       final gains = List<double>.generate(5, (i) => (i < eq.length ? eq[i] : 0).clamp(-12, 12).toDouble());
       // Five broad, stable peaking bands using RBJ biquad coefficients.
-      var signal = dry[c];
+      var signal = cleaned[c];
       for (var band = 0; band < 5; band++) {
         final gain = math.pow(10, gains[band] / 40).toDouble();
         final w = 2 * math.pi * centers[band] / rate;
