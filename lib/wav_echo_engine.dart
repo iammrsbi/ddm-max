@@ -45,6 +45,7 @@ class WavEchoEngine {
     List<double> eq = const [0, 0, 0, 0, 0],
     bool pingPong = false,
     bool dual = false,
+    int mode = 0,
     bool bypass = false,
     bool noiseReduction = true,
     bool noiseGate = true,
@@ -152,21 +153,39 @@ class WavEchoEngine {
     final gain = level.clamp(0.0, 1.5).toDouble();
     final lineL = Float64List(delayFrames + 1);
     final lineR = Float64List((dual ? delayFrames * 3 : delayFrames) + 1);
+    double echoToneL = 0, echoToneR = 0;
     for (var f=0; f<totalFrames; f++) {
       final idxL = f % lineL.length;
       final idxR = f % lineR.length;
       final delayedL = lineL[idxL];
       final delayedR = lineR[idxR];
+      var echoL = delayedL;
+      var echoR = delayedR;
+      final toneAlpha = switch (mode) { 1 => 0.20, 2 => 0.12, 3 => 0.075, 4 => 0.24, _ => 1.0 };
+      if (mode >= 1 && mode <= 4) {
+        echoToneL += toneAlpha * (echoL - echoToneL);
+        echoToneR += toneAlpha * (echoR - echoToneR);
+        echoL = echoToneL;
+        echoR = echoToneR;
+      }
+      if (mode == 2) {
+        echoL = math.tanh(echoL * 1.25);
+        echoR = math.tanh(echoR * 1.25);
+      } else if (mode == 4) {
+        final wobble = 0.88 + 0.12 * math.sin(2 * math.pi * f / (rate * 2.8));
+        echoL *= wobble;
+        echoR *= wobble;
+      }
       final dryL = f < frames ? filtered[0][f] : 0.0;
       final dryR = ch == 2 && f < frames ? filtered[1][f] : dryL;
       if (outputChannels == 1) {
-        final echo = bypass ? 0.0 : delayedL;
+        final echo = bypass ? 0.0 : echoL;
         output[0][f] = (((dryL * (1-wet)) + ((dryL + echo) * wet)) * gain).toDouble();
       } else {
-        final echoL = bypass ? 0.0 : delayedL;
-        final echoR = bypass ? 0.0 : delayedR;
-        output[0][f] = (((dryL * (1-wet)) + ((dryL + echoL) * wet)) * gain).toDouble();
-        output[1][f] = (((dryR * (1-wet)) + ((dryR + echoR) * wet)) * gain).toDouble();
+        final wetL = bypass ? 0.0 : echoL;
+        final wetR = bypass ? 0.0 : echoR;
+        output[0][f] = (((dryL * (1-wet)) + ((dryL + wetL) * wet)) * gain).toDouble();
+        output[1][f] = (((dryR * (1-wet)) + ((dryR + wetR) * wet)) * gain).toDouble();
       }
       if (!bypass) {
         final inL = dryL;
