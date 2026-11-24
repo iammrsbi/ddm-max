@@ -52,9 +52,23 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
   Future<void> chooseAudio({bool forLibrary=false}) async {
     try {
-      final r=await FilePicker.platform.pickFiles(type:forLibrary?FileType.audio:FileType.custom,allowedExtensions:forLibrary?null:['wav']);
-      if(r==null||r.files.single.path==null)return;
-      final f=File(r.files.single.path!);
+      final r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:false,withReadStream:true);
+      if(r==null||r.files.isEmpty)return;
+      final picked=r.files.single;
+      File f;
+      if(picked.path!=null){
+        f=File(picked.path!);
+      }else if(picked.readStream!=null){
+        final d=await getApplicationDocumentsDirectory();
+        final imports=Directory('${d.path}/DDM-MAX/Imported');
+        await imports.create(recursive:true);
+        final safe=picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
+        f=File('${imports.path}/${DateTime.now().millisecondsSinceEpoch}_$safe');
+        await picked.readStream!.pipe(f.openWrite());
+      }else{
+        note('Phone se file ka path nahi mila. Dobara file select karo.');
+        return;
+      }
       setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;}});
       if(forLibrary){final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());}
       note('Audio file select ho gayi.');
@@ -89,9 +103,11 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       }
       final permission=await Permission.microphone.request();
       if(!permission.isGranted){note('Microphone permission allow karo.');return;}
-      await liveChannel.invokeMethod('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100});
+      final caps=await liveChannel.invokeMapMethod<String,dynamic>('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100});
       if(mounted)setState(()=>liveMonitoring=true);
-      note('Live mic delay chalu. Headphones use karo.');
+      final ns=caps?['noiseSuppressor']==true;
+      final aec=caps?['echoCanceler']==true;
+      note('Live mic chalu. Device Noise Suppression: ${ns?'ON':'not available'} • Echo cancellation: ${aec?'ON':'not available'}. Headphones use karo.');
     } catch(e) { note('Live mic start nahi hua: $e'); }
   }
   Future<void> startRecording() async {
@@ -248,7 +264,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       outlined(Icons.share,'SHARE / EXPORT WAV',()=>shareFile(processed)),
       if(processed!=null)Text('Saved: ${processed!.path}',style:const TextStyle(color:green,fontSize:10)),
     ])),
-    const Text('Supported input: PCM 16-bit mono/stereo WAV. Other formats can be selected but may need WAV conversion.',style:TextStyle(color:Colors.white54,fontSize:10)),
+    const Text('Audio playback: phone-supported formats. Echo processing: PCM 16-bit mono/stereo WAV only; other formats must be converted to WAV first.',style:TextStyle(color:Colors.white54,fontSize:10)),
   ]);
   Widget eqPage()=>scroll([
     title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
