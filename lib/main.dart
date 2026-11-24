@@ -43,7 +43,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
-  File? selected,processed,recorded;
+  File? selected,processed,recorded,currentPlayback;
   List<File> library=[];
   double playbackVolume=1.0,ancLevel=65;
   String? recordingPath;
@@ -123,15 +123,33 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     }
   }
   Future<void> play(File? f) async {
-    if(f==null){note('Pehle audio file select karo.');return;}
-    try{await player.stop();await player.setVolume(playbackVolume);await player.setReleaseMode(loop?ReleaseMode.loop:ReleaseMode.release);await player.play(DeviceFileSource(f.path));}
-    catch(e){note('Play error: $e');}
+    if (f == null) { note('Pehle audio file select karo.'); return; }
+    if (!await f.exists() || await f.length() == 0) { note('Audio file mil nahi rahi. Dobara upload karo.'); return; }
+    try {
+      await player.stop();
+      currentPlayback = f;
+      await player.setVolume(playbackVolume);
+      await player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
+      await player.play(DeviceFileSource(f.path));
+    } catch (e) { note('Play error: $e'); }
   }
-  Future<void> togglePause() async {try {if(player.state==PlayerState.playing){await player.pause();}else{await player.resume();}}catch(e){note('Playback control error: $e');}}
+  Future<void> togglePause() async {
+    try {
+      if (player.state == PlayerState.playing) {
+        await player.pause();
+      } else if (player.state == PlayerState.paused) {
+        await player.resume();
+      } else if (currentPlayback != null) {
+        await play(currentPlayback);
+      } else {
+        note('Pehle PLAY ORIGINAL dabao.');
+      }
+    } catch (e) { note('Playback control error: $e'); }
+  }
   String _time(Duration d){final m=d.inMinutes.remainder(60).toString().padLeft(2,'0');final sec=d.inSeconds.remainder(60).toString().padLeft(2,'0');final h=d.inHours;return h>0?'$h:$m:$sec':'$m:$sec';}
   Future<void> auditionEffect() async {await process(selected);if(processed!=null)await play(processed);}
 
-  Future<void> stop() async {await player.stop();}
+  Future<void> stop() async { await player.stop(); if(mounted)setState(()=>filePosition=Duration.zero); }
   Future<File> _decodeUploadedAudio(File source) async {
     if (!await source.exists() || await source.length() == 0) {
       throw const FormatException('Uploaded audio file missing ya empty hai.');
@@ -524,7 +542,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget mode(String label,bool active,VoidCallback fn)=>OutlinedButton(
     onPressed:fn,style:OutlinedButton.styleFrom(backgroundColor:active?green:Colors.transparent,foregroundColor:active?Colors.black:Colors.white,side:BorderSide(color:active?green:Colors.white30),padding:const EdgeInsets.symmetric(vertical:11)),
     child:Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.bold)));
-  Widget action(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label),style:FilledButton.styleFrom(backgroundColor:green,foregroundColor:Colors.black)));
-  Widget outlined(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label,style:const TextStyle(fontSize:10))));
+  Widget action(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label),style:FilledButton.styleFrom(backgroundColor:green,foregroundColor:Colors.black,shape:const StadiumBorder(),padding:const EdgeInsets.symmetric(vertical:14))));
+  Widget outlined(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label,style:const TextStyle(fontSize:10)),style:OutlinedButton.styleFrom(shape:const StadiumBorder(),padding:const EdgeInsets.symmetric(vertical:12))));
   Widget _pill(String s)=>Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),decoration:BoxDecoration(color:green.withOpacity(.16),borderRadius:BorderRadius.circular(20),border:Border.all(color:green.withOpacity(.5))),child:Text(s,style:const TextStyle(color:green,fontSize:9,fontWeight:FontWeight.bold)));
 }
