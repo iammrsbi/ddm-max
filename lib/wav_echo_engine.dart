@@ -3,6 +3,38 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 class WavEchoEngine {
+  static Future<void> validate({required File input}) async {
+    final bytes = await input.readAsBytes();
+    if (bytes.length < 44 ||
+        String.fromCharCodes(bytes.sublist(0, 4)) != 'RIFF' ||
+        String.fromCharCodes(bytes.sublist(8, 12)) != 'WAVE') {
+      throw const FormatException('Compressed audio or unsupported WAV container.');
+    }
+    final data = ByteData.sublistView(bytes);
+    var offset = 12;
+    int? channels, bits, format, dataLength;
+    while (offset + 8 <= bytes.length) {
+      final id = String.fromCharCodes(bytes.sublist(offset, offset + 4));
+      final size = data.getUint32(offset + 4, Endian.little);
+      final start = offset + 8;
+      if (start + size > bytes.length) break;
+      if (id == 'fmt ' && size >= 16) {
+        format = data.getUint16(start, Endian.little);
+        channels = data.getUint16(start + 2, Endian.little);
+        bits = data.getUint16(start + 14, Endian.little);
+      } else if (id == 'data') {
+        dataLength = size;
+        break;
+      }
+      offset = start + size + (size.isOdd ? 1 : 0);
+    }
+    if (format != 1 || bits != 16 || channels == null ||
+        (channels != 1 && channels != 2) || dataLength == null ||
+        dataLength < channels * 2 || dataLength % (channels * 2) != 0) {
+      throw const FormatException('WAV ko PCM 16-bit mono/stereo mein convert karna zaroori hai.');
+    }
+  }
+
   static Future<File> render({
     required File input,
     required Directory outputDirectory,
@@ -160,8 +192,12 @@ class WavEchoEngine {
     txt('RIFF');u32(36+payload.length);txt('WAVE');txt('fmt ');u32(16);u16(1);u16(outputChannels);
     u32(rate);u32(rate*outputChannels*2);u16(outputChannels*2);u16(16);txt('data');u32(payload.length);result.add(payload);
     await outputDirectory.create(recursive:true);
-    final safe = input.uri.pathSegments.last.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
-    final file=File('${outputDirectory.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_$safe');
+    final originalName = input.uri.pathSegments.isEmpty ? 'audio' : input.uri.pathSegments.last;
+    final dot = originalName.lastIndexOf('.');
+    final baseName = (dot > 0 ? originalName.substring(0, dot) : originalName)
+        .replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    // The renderer always writes RIFF/WAVE bytes, so the exported extension must always be .wav.
+    final file=File('${outputDirectory.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_$baseName.wav');
     await file.writeAsBytes(result.takeBytes(),flush:true);
     return file;
   }
