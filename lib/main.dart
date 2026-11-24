@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
@@ -35,24 +36,32 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
   File? selected,processed,recorded;
-  final List<File> library=[];
+  List<File> library=[];
+  double playbackVolume=1.0;
   String? recordingPath;
 
+  @override void initState(){super.initState();_loadLibrary();}
+  Future<void> _loadLibrary() async {
+    final prefs=await SharedPreferences.getInstance();
+    final paths=prefs.getStringList('ddm_naat_library')??[];
+    if(mounted)setState(()=>library=paths.where((p)=>File(p).existsSync()).map((p)=>File(p)).toList());
+  }
   @override void dispose(){liveChannel.invokeMethod('stop');player.dispose();recorder.dispose();super.dispose();}
 
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
   Future<void> chooseAudio({bool forLibrary=false}) async {
     try {
-      final r=await FilePicker.platform.pickFiles(type:FileType.audio);
+      final r=await FilePicker.platform.pickFiles(type:forLibrary?FileType.audio:FileType.custom,allowedExtensions:forLibrary?null:['wav']);
       if(r==null||r.files.single.path==null)return;
       final f=File(r.files.single.path!);
       setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;}});
+      if(forLibrary){final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());}
       note('Audio file select ho gayi.');
     }catch(e){note('File select error: $e');}
   }
   Future<void> play(File? f) async {
     if(f==null){note('Pehle audio file select karo.');return;}
-    try{await player.stop();await player.setReleaseMode(loop?ReleaseMode.loop:ReleaseMode.release);await player.play(DeviceFileSource(f.path));}
+    try{await player.stop();await player.setVolume(playbackVolume);await player.setReleaseMode(loop?ReleaseMode.loop:ReleaseMode.release);await player.play(DeviceFileSource(f.path));}
     catch(e){note('Play error: $e');}
   }
   Future<void> stop() async {await player.stop();}
@@ -228,13 +237,18 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ]))),
   ]);
   Widget settingsPage()=>scroll([
-    title('SETTINGS','DDM-MAX app options'),
+    title('SETTINGS','Playback and app information'),
     box(const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Text('APP VERSION 1.0',style:TextStyle(color:gold,fontWeight:FontWeight.bold)),
       SizedBox(height:8),Text('Audio processing: WAV file engine'),
       Text('Microphone: Android record permission'),
+      Text('Playback volume can be adjusted below.'),
       Text('Developer: IDRISH'),
       SizedBox(height:8),Text('For best results, use WAV audio at 44.1 kHz.',style:TextStyle(color:Colors.white60,fontSize:11)),
+    ])),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      slider('PLAYBACK VOLUME',playbackVolume*100,0,100,'${(playbackVolume*100).round()}%',(v){setState(()=>playbackVolume=v/100);player.setVolume(v/100);}),
+      const Text('Dark console theme is enabled.',style:TextStyle(color:Colors.white60,fontSize:11)),
     ])),
   ]);
   Widget slider(String name,double value,double min,double max,String read,ValueChanged<double> onChanged)=>Padding(
