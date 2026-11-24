@@ -3,312 +3,226 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:share_plus/share_plus.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
-const green = Color(0xFF20C878);
-const gold = Color(0xFFFFC857);
-const panel = Color(0xDD101B18);
+const green = Color(0xFF20C878), gold = Color(0xFFFFC857), panel = Color(0xDD101B18);
 
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    title: 'DDM-MAX',
-    theme: ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF07110E),
-      colorScheme: ColorScheme.fromSeed(seedColor: green, brightness: Brightness.dark),
-      sliderTheme: const SliderThemeData(activeTrackColor: green, thumbColor: gold, inactiveTrackColor: Colors.white24),
-    ),
-    home: const ConsoleHome(),
-  );
+  @override Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner:false, title:'DDM-MAX',
+    theme:ThemeData(brightness:Brightness.dark,scaffoldBackgroundColor:const Color(0xFF07110E),
+      colorScheme:ColorScheme.fromSeed(seedColor:green,brightness:Brightness.dark),
+      sliderTheme:const SliderThemeData(activeTrackColor:green,thumbColor:gold,inactiveTrackColor:Colors.white24)),
+    home:const ConsoleHome());
 }
 
 class ConsoleHome extends StatefulWidget {
   const ConsoleHome({super.key});
-  @override
-  State<ConsoleHome> createState() => _ConsoleHomeState();
+  @override State<ConsoleHome> createState()=>_ConsoleHomeState();
 }
-
 class _ConsoleHomeState extends State<ConsoleHome> {
-  int tab = 0;
-  double level = 70, feedback = 42, delayTime = 360, mix = 35;
-  double bass = 0, lowMid = 0, mid = 0, highMid = 0, treble = 0;
-  bool bypass = false, pingPong = false, dual = false, liveMic = false, loop = false, recording = false;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  File? _selectedAudio;
-  File? _echoAudio;
-  bool _working = false;
-  bool _isPlaying = false;
+  int tab=0;
+  double level=80,feedback=38,delayTime=320,mix=45;
+  final List<double> eq=[0,0,0,0,0];
+  bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false;
+  final AudioPlayer player=AudioPlayer();
+  final AudioRecorder recorder=AudioRecorder();
+  File? selected,processed,recorded;
+  final List<File> library=[];
+  String? recordingPath;
 
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
+  @override void dispose(){player.dispose();recorder.dispose();super.dispose();}
 
-  Future<void> _pickAudio() async {
+  void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
+  Future<void> chooseAudio({bool forLibrary=false}) async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['wav']);
-      if (result == null || result.files.single.path == null) return;
-      await _audioPlayer.stop();
-      setState(() { _selectedAudio = File(result.files.single.path!); _echoAudio = null; _isPlaying = false; });
-      _notice('WAV file select ho gayi. Ab PLAY ya SAVE ECHO dabao.');
-    } catch (e) { _notice('File select nahi hui: $e'); }
+      final r=await FilePicker.platform.pickFiles(type:FileType.audio);
+      if(r==null||r.files.single.path==null)return;
+      final f=File(r.files.single.path!);
+      setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;}});
+      note('Audio file select ho gayi.');
+    }catch(e){note('File select error: $e');}
   }
-
-  Future<void> _playAudio({bool echo = false}) async {
-    final file = echo ? _echoAudio : _selectedAudio;
-    if (file == null) { _notice(echo ? 'Pehle SAVE ECHO banao.' : 'Pehle WAV file select karo.'); return; }
-    try {
-      await _audioPlayer.stop();
-      await _audioPlayer.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
-      await _audioPlayer.play(DeviceFileSource(file.path));
-      setState(() => _isPlaying = true);
-    } catch (e) { _notice('Audio play nahi hua: $e'); }
+  Future<void> play(File? f) async {
+    if(f==null){note('Pehle audio file select karo.');return;}
+    try{await player.stop();await player.setReleaseMode(loop?ReleaseMode.loop:ReleaseMode.release);await player.play(DeviceFileSource(f.path));}
+    catch(e){note('Play error: $e');}
   }
-
-  Future<void> _stopAudio() async {
-    await _audioPlayer.stop();
-    if (mounted) setState(() => _isPlaying = false);
+  Future<void> stop() async {await player.stop();}
+  Future<void> process(File? source) async {
+    if(source==null){note('Pehle audio file select ya record karo.');return;}
+    setState(()=>working=true);
+    try{
+      final d=await getApplicationDocumentsDirectory();
+      final out=await WavEchoEngine.render(input:source,outputDirectory:Directory('${d.path}/DDM-MAX'),
+        delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
+        eq:eq,pingPong:pingPong,dual:dual,bypass:bypass);
+      if(!mounted)return;
+      setState(()=>processed=out);note('Processed WAV save ho gayi.');
+    }catch(e){note('Processing error: $e');}
+    finally{if(mounted)setState(()=>working=false);}
   }
-
-  Future<void> _makeEcho() async {
-    if (_selectedAudio == null) { _notice('Pehle WAV file select karo.'); return; }
-    setState(() => _working = true);
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final output = await WavEchoEngine.render(
-        input: _selectedAudio!, outputDirectory: Directory('${dir.path}/DDM-MAX'),
-        delayMs: delayTime.round(), feedback: feedback / 100,
-        mix: mix / 100, level: level / 100,
-      );
-      if (!mounted) return;
-      setState(() { _echoAudio = output; _working = false; });
-      _notice('Echo WAV save ho gayi: ${output.path}');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _working = false);
-      _notice('Echo process nahi hua: $e');
-    }
+  Future<void> startRecording() async {
+    try{
+      if(!await recorder.hasPermission()){note('Microphone permission allow karo.');return;}
+      final d=await getApplicationDocumentsDirectory();
+      recordingPath='${d.path}/DDM-MAX/record_${DateTime.now().millisecondsSinceEpoch}.wav';
+      await Directory('${d.path}/DDM-MAX').create(recursive:true);
+      await recorder.start(const RecordConfig(encoder:AudioEncoder.wav,sampleRate:44100,numChannels:1),path:recordingPath!);
+      setState(()=>recording=true);note('Mic recording start ho gayi.');
+    }catch(e){note('Recording start nahi hui: $e');}
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [_delayPage(), _filePage(), _eqPage(), _recordPage(), _libraryPage()];
+  Future<void> stopRecording() async {
+    try{
+      final p=await recorder.stop();
+      if(p!=null){setState(()=>recorded=File(p));note('Recording save ho gayi. Ab Play ya Process Echo dabao.');}
+    }catch(e){note('Recording stop error: $e');}
+    if(mounted)setState(()=>recording=false);
+  }
+  Future<void> shareFile(File? f) async {
+    if(f==null){note('Pehle file banao.');return;}
+    await Share.shareXFiles([XFile(f.path)],text:'DDM-MAX Audio');
+  }
+  @override Widget build(BuildContext context){
+    final pages=[delayPage(),filePage(),eqPage(),recordPage(),libraryPage(),settingsPage()];
     return Scaffold(
-      body: Stack(fit: StackFit.expand, children: [
-        Image.asset('assets/combo_bg.jpg', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: const Color(0xFF07110E))),
-        Container(color: const Color(0xE607100D)),
-        SafeArea(child: Column(children: [_header(), Expanded(child: pages[tab])])),
+      body:Stack(fit:StackFit.expand,children:[
+        Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF07110E))),
+        Container(color:const Color(0xE607100D)),
+        SafeArea(child:Column(children:[header(),Expanded(child:pages[tab])])),
       ]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (v) => setState(() => tab = v),
-        backgroundColor: const Color(0xFF0B1713),
-        indicatorColor: green.withOpacity(.22),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.graphic_eq), label: 'Delay'),
-          NavigationDestination(icon: Icon(Icons.audio_file), label: 'File Echo'),
-          NavigationDestination(icon: Icon(Icons.tune), label: 'EQ'),
-          NavigationDestination(icon: Icon(Icons.mic), label: 'Record'),
-          NavigationDestination(icon: Icon(Icons.library_music), label: 'Naat'),
-        ],
-      ),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
+        backgroundColor:const Color(0xFF0B1713),indicatorColor:green.withOpacity(.22),
+        destinations:const[
+          NavigationDestination(icon:Icon(Icons.graphic_eq),label:'Delay'),
+          NavigationDestination(icon:Icon(Icons.audio_file),label:'File Echo'),
+          NavigationDestination(icon:Icon(Icons.tune),label:'EQ'),
+          NavigationDestination(icon:Icon(Icons.mic),label:'Record'),
+          NavigationDestination(icon:Icon(Icons.library_music),label:'Naat'),
+          NavigationDestination(icon:Icon(Icons.settings),label:'Settings'),
+        ]),
     );
   }
-
-  Widget _header() => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-    child: Row(children: [
-      Container(width: 46, height: 46, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: gold, width: 1.5), color: Colors.black54), child: const Icon(Icons.graphic_eq, color: gold, size: 27)),
-      const SizedBox(width: 12),
-      const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('DDM-MAX', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 2)),
-        Text('DIGITAL DELAY • NAAT AUDIO SYSTEM', style: TextStyle(fontSize: 9, color: gold, letterSpacing: 1.1)),
-      ])),
-      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: const Row(children: [Icon(Icons.circle, color: green, size: 8), SizedBox(width: 6), Text('READY', style: TextStyle(fontSize: 10, letterSpacing: 1))])),
-    ]),
-  );
-
-  Widget _scroll(List<Widget> children) => SingleChildScrollView(padding: const EdgeInsets.fromLTRB(14, 2, 14, 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children));
-  Widget _title(String title, String subtitle) => Padding(
-    padding: const EdgeInsets.only(bottom: 10, top: 5),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 1)),
-      Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.white60)),
-    ]),
-  );
-  Widget _panel(Widget child) => Container(
-    margin: const EdgeInsets.only(bottom: 13), padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(17), border: Border.all(color: Colors.white.withOpacity(.13)), boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 12, offset: Offset(0, 5))]),
-    child: child,
-  );
-
-  Widget _delayPage() => _scroll([
-    Row(children: [const Expanded(child: Text('DIGITAL DELAY', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 1))), _pill('DD-8 STYLE')]),
-    const Text('STUDIO EFFECT PROCESSOR', style: TextStyle(fontSize: 10, color: Colors.white60)),
-    const SizedBox(height: 10),
-    _panel(Column(children: [
-      Row(children: [Expanded(child: _mode('SINGLE DELAY', !dual, () => setState(() => dual = false))), const SizedBox(width: 8), Expanded(child: _mode('DUAL DELAY', dual, () => setState(() => dual = true)))]),
-      const SizedBox(height: 10),
-      Row(children: [Expanded(child: _switch('PING-PONG', pingPong, (v) => setState(() => pingPong = v))), const SizedBox(width: 8), Expanded(child: _switch('BYPASS', bypass, (v) => setState(() => bypass = v)))]),
+  Widget header()=>Padding(padding:const EdgeInsets.fromLTRB(16,10,16,12),child:Row(children:[
+    Container(width:46,height:46,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:gold,width:1.5),color:Colors.black54),child:const Icon(Icons.graphic_eq,color:gold,size:27)),
+    const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text('DDM-MAX',style:TextStyle(fontSize:23,fontWeight:FontWeight.w900,letterSpacing:2)),
+      Text('DIGITAL DELAY • NAAT AUDIO SYSTEM',style:TextStyle(fontSize:9,color:gold,letterSpacing:1.1)),
+    ])),_pill('AUDIO READY'),
+  ]));
+  Widget scroll(List<Widget> c)=>SingleChildScrollView(padding:const EdgeInsets.fromLTRB(14,4,14,20),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:c));
+  Widget title(String a,String b)=>Padding(padding:const EdgeInsets.only(bottom:10,top:5),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text(a,style:const TextStyle(fontSize:17,fontWeight:FontWeight.bold,letterSpacing:1)),
+    Text(b,style:const TextStyle(fontSize:10,color:Colors.white60)),
+  ]));
+  Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
+    decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(17),border:Border.all(color:Colors.white.withOpacity(.13))),child:c);
+  Widget delayPage()=>scroll([
+    title('DIGITAL DELAY','Controls are applied when processing an audio file or recording.'),
+    box(Column(children:[
+      Row(children:[Expanded(child:mode('SINGLE DELAY',!dual,()=>setState(()=>dual=false))),const SizedBox(width:8),Expanded(child:mode('DUAL DELAY',dual,()=>setState(()=>dual=true)))]),
+      Row(children:[Expanded(child:sw('PING-PONG',pingPong,(v)=>setState(()=>pingPong=v))),Expanded(child:sw('BYPASS',bypass,(v)=>setState(()=>bypass=v)))]),
+      slider('LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
+      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
+      slider('TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
+      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
     ])),
-    _panel(Column(children: [
-      _slider('LEVEL', level, 0, 100, level.round().toString() + '%', (v) => setState(() => level = v)),
-      _slider('FEEDBACK', feedback, 0, 95, feedback.round().toString() + '%', (v) => setState(() => feedback = v)),
-      _slider('TIME', delayTime, 40, 1200, delayTime.round().toString() + ' ms', (v) => setState(() => delayTime = v)),
-      _slider('EFFECT MIX', mix, 0, 100, mix.round().toString() + '%', (v) => setState(() => mix = v)),
-    ])),
-    _title('INPUT SOURCE', 'CHOOSE YOUR AUDIO INPUT'),
-    _panel(Row(children: [
-      Expanded(child: _action(Icons.mic, 'LIVE MIC', liveMic, () => setState(() => liveMic = !liveMic))),
-      const SizedBox(width: 10),
-      Expanded(child: _action(Icons.audio_file, 'FILE INPUT', false, () => setState(() => tab = 1))),
-    ])),
-    _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('SIGNAL MONITOR', style: TextStyle(color: gold, fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 12),
-      Row(children: List.generate(24, (i) => Expanded(child: Container(height: 8 + ((i * 17) % 23).toDouble(), margin: const EdgeInsets.symmetric(horizontal: 1), decoration: BoxDecoration(color: i < 17 ? green : gold, borderRadius: BorderRadius.circular(3)))))),
-      const SizedBox(height: 7),
-      const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('INPUT', style: TextStyle(fontSize: 9, color: Colors.white54)), Text('OUTPUT', style: TextStyle(fontSize: 9, color: Colors.white54))]),
-    ])),
-    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Interface stage: audio DSP and live microphone routing are not connected yet.', style: TextStyle(color: Colors.white54, fontSize: 10))),
-  ]);
-
-  Widget _filePage() => _scroll([
-    _title('FILE ECHO', 'REAL WAV DELAY PROCESSOR'),
-    _panel(Column(children: [
-      const Icon(Icons.audio_file, size: 54, color: gold), const SizedBox(height: 10),
-      Text(_selectedAudio == null ? 'NO AUDIO SELECTED' : _selectedAudio!.uri.pathSegments.last, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: .5)),
-      const SizedBox(height: 5), const Text('Select an uncompressed PCM 16-bit WAV file', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 11)),
-      const SizedBox(height: 15),
-      _action(Icons.folder_open, 'CHOOSE WAV FILE', _selectedAudio != null, _working ? () {} : _pickAudio),
-    ])),
-    _panel(Column(children: [
-      _slider('DELAY TIME', delayTime, 40, 1200, delayTime.round().toString() + ' ms', (v) => setState(() => delayTime = v)),
-      _slider('FEEDBACK', feedback, 0, 92, feedback.round().toString() + '%', (v) => setState(() => feedback = v)),
-      _slider('EFFECT MIX', mix, 0, 100, mix.round().toString() + '%', (v) => setState(() => mix = v)),
-      _slider('OUTPUT LEVEL', level, 0, 100, level.round().toString() + '%', (v) => setState(() => level = v)),
-      _switch('REPEAT / LOOP PLAYBACK', loop, (v) => setState(() => loop = v)),
-      const Divider(color: Colors.white12),
-      Row(children: [
-        Expanded(child: _outline(Icons.play_arrow, 'PLAY ORIGINAL', () => _playAudio())),
-        const SizedBox(width: 7), Expanded(child: _outline(Icons.stop, 'STOP', _stopAudio)),
-      ]),
-      const SizedBox(height: 9),
-      SizedBox(width: double.infinity, child: FilledButton.icon(
-        onPressed: _working ? null : _makeEcho,
-        icon: _working ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome),
-        label: Text(_working ? 'PROCESSING WAV...' : 'PROCESS & SAVE ECHO'),
-        style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 13)),
-      )),
-      const SizedBox(height: 8),
-      SizedBox(width: double.infinity, child: OutlinedButton.icon(
-        onPressed: _echoAudio == null ? null : () => _playAudio(echo: true),
-        icon: const Icon(Icons.play_circle), label: const Text('PLAY PROCESSED ECHO'),
-      )),
-      if (_echoAudio != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Saved: ${_echoAudio!.uri.pathSegments.last}', textAlign: TextAlign.center, style: const TextStyle(color: green, fontSize: 10))),
-    ])),
-    _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('BEFORE / AFTER', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1)),
-      const SizedBox(height: 12),
-      Row(children: [Expanded(child: _compare('BEFORE', _selectedAudio == null ? 'Original audio' : 'Original WAV selected')), const SizedBox(width: 8), Expanded(child: _compare('AFTER', _echoAudio == null ? 'Process echo first' : 'Echo file ready'))]),
-    ])),
-    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Note: This first working processor supports PCM 16-bit mono/stereo WAV. MP3 conversion and live microphone DSP are separate next steps.', style: TextStyle(color: Colors.white54, fontSize: 10))),
-  ]);
-
-  Widget _eqPage() => _scroll([
-    _title('5-BAND EQUALIZER', 'SHAPE YOUR NAAT VOICE'),
-    _panel(Column(children: [
-      Row(children: [
-        Expanded(child: _mode('FLAT', bass == 0 && treble == 0, () => setState(() { bass = 0; lowMid = 0; mid = 0; highMid = 0; treble = 0; }))),
-        const SizedBox(width: 7),
-        Expanded(child: _mode('NAAT VOICE', false, () => setState(() { bass = 2; lowMid = 1; mid = 3; highMid = 4; treble = 2; }))),
-      ]),
-      const SizedBox(height: 8),
-      _slider('BASS', bass, -12, 12, bass.toStringAsFixed(0) + ' dB', (v) => setState(() => bass = v)),
-      _slider('LOW MID', lowMid, -12, 12, lowMid.toStringAsFixed(0) + ' dB', (v) => setState(() => lowMid = v)),
-      _slider('MID', mid, -12, 12, mid.toStringAsFixed(0) + ' dB', (v) => setState(() => mid = v)),
-      _slider('HIGH MID', highMid, -12, 12, highMid.toStringAsFixed(0) + ' dB', (v) => setState(() => highMid = v)),
-      _slider('TREBLE', treble, -12, 12, treble.toStringAsFixed(0) + ' dB', (v) => setState(() => treble = v)),
-    ])),
-    _panel(Row(children: [
-      Expanded(child: _mode('BASS BOOST', false, () => setState(() => bass = 8))),
-      const SizedBox(width: 8),
-      Expanded(child: _mode('CLEAR VOCAL', false, () => setState(() { mid = 3; highMid = 6; treble = 3; }))),
-    ])),
-    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Equalizer controls are interface-only until connected to the native audio engine.', style: TextStyle(color: Colors.white54, fontSize: 10))),
-  ]);
-
-  Widget _recordPage() => _scroll([
-    _title('RECORDING STUDIO', 'CAPTURE YOUR NAAT PERFORMANCE'),
-    _panel(Column(children: [
-      Container(width: 112, height: 112, decoration: BoxDecoration(shape: BoxShape.circle, color: recording ? Colors.red.withOpacity(.2) : Colors.white10, border: Border.all(color: recording ? Colors.redAccent : gold, width: 2)), child: Icon(recording ? Icons.stop : Icons.mic, size: 48, color: recording ? Colors.redAccent : gold)),
-      const SizedBox(height: 14),
-      Text(recording ? 'RECORDING' : 'READY TO RECORD', style: TextStyle(fontWeight: FontWeight.bold, color: recording ? Colors.redAccent : Colors.white, letterSpacing: 1.5)),
-      const SizedBox(height: 18),
-      SizedBox(width: double.infinity, child: FilledButton.icon(
-        style: FilledButton.styleFrom(backgroundColor: recording ? Colors.red.shade700 : green, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 14)),
-        onPressed: () => setState(() => recording = !recording),
-        icon: Icon(recording ? Icons.stop : Icons.fiber_manual_record),
-        label: Text(recording ? 'STOP' : 'START RECORDING', style: const TextStyle(fontWeight: FontWeight.bold)),
-      )),
-    ])),
-    _panel(const Column(children: [Text('YOUR RECORDINGS', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1)), SizedBox(height: 12), Text('No recordings yet', style: TextStyle(color: Colors.white54, fontSize: 12))])),
-    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Recording controls are visual placeholders until microphone permission and file saving are connected.', style: TextStyle(color: Colors.white54, fontSize: 10))),
-  ]);
-
-  Widget _libraryPage() => _scroll([
-    _title('NAAT COLLECTION', 'YOUR AUDIO LIBRARY'),
-    _panel(const Column(children: [
-      Icon(Icons.library_music, size: 48, color: gold), SizedBox(height: 10),
-      Text('NAAT LIBRARY', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-      SizedBox(height: 6),
-      Text('Your existing Naat collection will be connected here.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 11)),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Text('PROCESS SOURCE AUDIO',style:TextStyle(color:gold,fontWeight:FontWeight.bold)),
+      const SizedBox(height:8),Text(selected?.path.split('/').last??'No source selected',style:const TextStyle(color:Colors.white70)),
+      FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('OPEN FILE ECHO')),
+      OutlinedButton.icon(onPressed:()=>setState(()=>tab=3),icon:const Icon(Icons.mic),label:const Text('OPEN LIVE MIC / RECORD')),
     ])),
   ]);
-
-  Widget _slider(String label, double value, double min, double max, String readout, ValueChanged<double> change) => Padding(
-    padding: const EdgeInsets.only(bottom: 7),
-    child: Column(children: [
-      Row(children: [Expanded(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1))), Text(readout, style: const TextStyle(color: gold, fontSize: 12, fontWeight: FontWeight.bold))]),
-      Slider(value: value.clamp(min, max), min: min, max: max, onChanged: change),
-    ]),
-  );
-
-  Widget _switch(String label, bool value, ValueChanged<bool> change) => Row(children: [
-    Expanded(child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: .7))),
-    Switch(value: value, activeColor: green, onChanged: change),
+  Widget filePage()=>scroll([
+    title('FILE ECHO','Select audio, process effects and save/share WAV output.'),
+    box(Column(children:[
+      const Icon(Icons.audio_file,size:48,color:gold),const SizedBox(height:8),
+      Text(selected?.path.split('/').last??'NO AUDIO SELECTED',textAlign:TextAlign.center),
+      const SizedBox(height:8),action(Icons.folder_open,'CHOOSE AUDIO FILE',()=>chooseAudio()),
+      const SizedBox(height:8),sw('REPEAT / LOOP PLAYBACK',loop,(v)=>setState(()=>loop=v)),
+      Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),const SizedBox(width:8),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
+    ])),
+    box(Column(children:[
+      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
+      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
+      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
+      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
+      FilledButton.icon(onPressed:working?null:()=>process(selected),icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.auto_awesome),label:Text(working?'PROCESSING...':'PROCESS & SAVE ECHO')),
+      const SizedBox(height:7),outlined(Icons.play_circle,'PLAY PROCESSED',()=>play(processed)),
+      outlined(Icons.share,'SHARE / EXPORT WAV',()=>shareFile(processed)),
+      if(processed!=null)Text('Saved: ${processed!.path}',style:const TextStyle(color:green,fontSize:10)),
+    ])),
+    const Text('Supported input: PCM 16-bit mono/stereo WAV. Other formats can be selected but may need WAV conversion.',style:TextStyle(color:Colors.white54,fontSize:10)),
   ]);
-
-  Widget _mode(String label, bool selected, VoidCallback tap) => OutlinedButton(
-    style: OutlinedButton.styleFrom(foregroundColor: selected ? Colors.black : Colors.white, backgroundColor: selected ? green : Colors.transparent, side: BorderSide(color: selected ? green : Colors.white30), padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-    onPressed: tap, child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-  );
-
-  Widget _action(IconData icon, String label, bool selected, VoidCallback tap) => FilledButton.icon(
-    style: FilledButton.styleFrom(backgroundColor: selected ? gold : green, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 13)),
-    onPressed: tap, icon: Icon(icon, size: 18), label: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-  );
-
-  Widget _outline(IconData icon, String label, VoidCallback tap) => OutlinedButton(
-    onPressed: tap, style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white30), padding: const EdgeInsets.symmetric(vertical: 11)),
-    child: Column(children: [Icon(icon, size: 19), const SizedBox(height: 3), Text(label, style: const TextStyle(fontSize: 9))]),
-  );
-
-  Widget _pill(String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(color: green.withOpacity(.16), borderRadius: BorderRadius.circular(20), border: Border.all(color: green.withOpacity(.5))),
-    child: Text(label, style: const TextStyle(color: green, fontSize: 9, fontWeight: FontWeight.bold)),
-  );
-
-  void _notice(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
-
-  static Widget _compare(String title, String subtitle) => Container(
-    padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10)),
-    child: Column(children: [Text(title, style: const TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text(subtitle, style: const TextStyle(color: Colors.white60, fontSize: 9))]),
-  );
+  Widget eqPage()=>scroll([
+    title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
+    box(Column(children:[
+      Row(children:[Expanded(child:mode('FLAT',eq.every((v)=>v==0),()=>setState(()=>eq.fillRange(0,5,0)))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',false,()=>setState(()=>{eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;})))]),
+      slider('BASS • 100 Hz',eq[0],-12,12,'${eq[0].round()} dB',(v)=>setState(()=>eq[0]=v)),
+      slider('LOW MID • 350 Hz',eq[1],-12,12,'${eq[1].round()} dB',(v)=>setState(()=>eq[1]=v)),
+      slider('MID • 1 kHz',eq[2],-12,12,'${eq[2].round()} dB',(v)=>setState(()=>eq[2]=v)),
+      slider('HIGH MID • 3.5 kHz',eq[3],-12,12,'${eq[3].round()} dB',(v)=>setState(()=>eq[3]=v)),
+      slider('TREBLE • 9 kHz',eq[4],-12,12,'${eq[4].round()} dB',(v)=>setState(()=>eq[4]=v)),
+      Row(children:[Expanded(child:mode('BASS BOOST',false,()=>setState(()=>{eq[0]=8;eq[1]=3;}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',false,()=>setState(()=>{eq[2]=3;eq[3]=6;eq[4]=3;})))]),
+      const SizedBox(height:8),const Text('EQ values are used by PROCESS & SAVE ECHO on the File Echo or Record tab.',style:TextStyle(color:Colors.white60,fontSize:10)),
+    ])),
+    FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('GO TO FILE ECHO')),
+  ]);
+  Widget recordPage()=>scroll([
+    title('LIVE MIC & RECORDING','Record from phone microphone, then process with delay and EQ.'),
+    box(Column(children:[
+      Icon(recording?Icons.fiber_manual_record:Icons.mic,size:64,color:recording?Colors.redAccent:gold),
+      Text(recording?'RECORDING NOW':'MICROPHONE READY',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1)),
+      const SizedBox(height:12),
+      SizedBox(width:double.infinity,child:FilledButton.icon(
+        style:FilledButton.styleFrom(backgroundColor:recording?Colors.red.shade700:green,foregroundColor:Colors.black),
+        onPressed:recording?stopRecording:startRecording,
+        icon:Icon(recording?Icons.stop:Icons.fiber_manual_record),label:Text(recording?'STOP & SAVE RECORDING':'START RECORDING'))),
+      const SizedBox(height:8),Text(recorded?.path.split('/').last??'No recording saved yet',style:const TextStyle(color:Colors.white60,fontSize:11)),
+      Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY RECORDING',()=>play(recorded))),const SizedBox(width:7),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
+      FilledButton.icon(onPressed:working||recorded==null?null:()=>process(recorded),icon:const Icon(Icons.graphic_eq),label:const Text('PROCESS RECORDING WITH EFFECTS')),
+      outlined(Icons.share,'SHARE PROCESSED RECORDING',()=>shareFile(processed)),
+    ])),
+    const Text('Mic capture and recording are implemented. This version records first and applies effects after recording; realtime zero-latency live echo monitoring is not yet available.',style:TextStyle(color:Colors.white54,fontSize:10)),
+  ]);
+  Widget libraryPage()=>scroll([
+    title('NAAT COLLECTION','Add audio tracks from your phone and play them here.'),
+    box(Column(children:[
+      const Icon(Icons.library_music,size:48,color:gold),const Text('MY NAAT COLLECTION',style:TextStyle(fontWeight:FontWeight.bold)),
+      const SizedBox(height:8),action(Icons.add,'ADD NAAT AUDIO',()=>chooseAudio(forLibrary:true)),
+    ])),
+    if(library.isEmpty)box(const Text('Abhi collection khaali hai. ADD NAAT AUDIO se apni files add karo.',textAlign:TextAlign.center,style:TextStyle(color:Colors.white60))),
+    ...library.map((f)=>box(Row(children:[
+      const Icon(Icons.music_note,color:gold),const SizedBox(width:8),Expanded(child:Text(f.path.split('/').last,maxLines:2,overflow:TextOverflow.ellipsis)),
+      IconButton(onPressed:()=>play(f),icon:const Icon(Icons.play_arrow,color:green)),
+      IconButton(onPressed:()=>shareFile(f),icon:const Icon(Icons.share)),
+    ]))),
+  ]);
+  Widget settingsPage()=>scroll([
+    title('SETTINGS','DDM-MAX app options'),
+    box(const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text('APP VERSION 1.0',style:TextStyle(color:gold,fontWeight:FontWeight.bold)),
+      SizedBox(height:8),Text('Audio processing: WAV file engine'),
+      Text('Microphone: Android record permission'),
+      Text('Developer: IDRISH'),
+      SizedBox(height:8),Text('For best results, use WAV audio at 44.1 kHz.',style:TextStyle(color:Colors.white60,fontSize:11)),
+    ])),
+  ]);
+  Widget slider(String name,double value,double min,double max,String read,ValueChanged<double> onChanged)=>Padding(
+    padding:const EdgeInsets.only(bottom:7),child:Column(children:[
+      Row(children:[Expanded(child:Text(name,style:const TextStyle(fontSize:11,fontWeight:FontWeight.bold,letterSpacing:.7))),Text(read,style:const TextStyle(color:gold,fontWeight:FontWeight.bold,fontSize:12))]),
+      Slider(value:value.clamp(min,max),min:min,max:max,onChanged:onChanged),
+    ]));
+  Widget sw(String label,bool value,ValueChanged<bool> fn)=>Row(children:[Expanded(child:Text(label,style:const TextStyle(fontSize:11,fontWeight:FontWeight.bold))),Switch(value:value,activeColor:green,onChanged:fn)]);
+  Widget mode(String label,bool active,VoidCallback fn)=>OutlinedButton(
+    onPressed:fn,style:OutlinedButton.styleFrom(backgroundColor:active?green:Colors.transparent,foregroundColor:active?Colors.black:Colors.white,side:BorderSide(color:active?green:Colors.white30),padding:const EdgeInsets.symmetric(vertical:11)),
+    child:Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.bold)));
+  Widget action(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label),style:FilledButton.styleFrom(backgroundColor:green,foregroundColor:Colors.black)));
+  Widget outlined(IconData icon,String label,VoidCallback fn)=>SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:fn,icon:Icon(icon),label:Text(label,style:const TextStyle(fontSize:10))));
+  Widget _pill(String s)=>Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),decoration:BoxDecoration(color:green.withOpacity(.16),borderRadius:BorderRadius.circular(20),border:Border.all(color:green.withOpacity(.5))),child:Text(s,style:const TextStyle(color:green,fontSize:9,fontWeight:FontWeight.bold)));
 }
