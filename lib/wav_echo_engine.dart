@@ -112,7 +112,9 @@ class WavEchoEngine {
       }
       return signal;
     });
-    final output = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
+    // Mono input is promoted to stereo when a spatial mode is requested.
+    final outputChannels = (ch == 1 && (pingPong || dual)) ? 2 : ch;
+    final output = List<Float64List>.generate(outputChannels, (_) => Float64List(totalFrames));
     final fb = feedback.clamp(0.0, 0.92).toDouble();
     final wet = mix.clamp(0.0, 1.0).toDouble();
     final gain = level.clamp(0.0, 1.5).toDouble();
@@ -123,22 +125,28 @@ class WavEchoEngine {
       final idxR = f % lineR.length;
       final delayedL = lineL[idxL];
       final delayedR = lineR[idxR];
-      for (var c=0;c<ch;c++) {
-        final drySample = f < frames ? filtered[c][f] : 0.0;
-        final delayed = ch == 1 ? delayedL : (pingPong ? (c == 0 ? delayedR : delayedL) : (c == 0 ? delayedL : delayedR));
-        final echo = bypass ? 0.0 : delayed;
-        output[c][f] = (((drySample * (1-wet)) + ((drySample + echo) * wet)) * gain).toDouble();
+      final dryL = f < frames ? filtered[0][f] : 0.0;
+      final dryR = ch == 2 && f < frames ? filtered[1][f] : dryL;
+      if (outputChannels == 1) {
+        final echo = bypass ? 0.0 : delayedL;
+        output[0][f] = (((dryL * (1-wet)) + ((dryL + echo) * wet)) * gain).toDouble();
+      } else {
+        final echoL = bypass ? 0.0 : delayedL;
+        final echoR = bypass ? 0.0 : delayedR;
+        output[0][f] = (((dryL * (1-wet)) + ((dryL + echoL) * wet)) * gain).toDouble();
+        output[1][f] = (((dryR * (1-wet)) + ((dryR + echoR) * wet)) * gain).toDouble();
       }
       if (!bypass) {
-        final inL = f < frames ? filtered[0][f] : 0.0;
-        final inR = ch == 2 && f < frames ? filtered[1][f] : inL;
-        lineL[idxL] = (inL + (pingPong && ch == 2 ? delayedR : delayedL) * fb).clamp(-1.0,1.0).toDouble();
-        lineR[idxR] = (inR + (pingPong && ch == 2 ? delayedL : delayedR) * fb).clamp(-1.0,1.0).toDouble();
+        final inL = dryL;
+        // Mono ping-pong starts on the left; the feedback crosses to the right.
+        final inR = ch == 2 ? dryR : (pingPong ? 0.0 : dryR);
+        lineL[idxL] = (inL + (pingPong ? delayedR : delayedL) * fb).clamp(-1.0,1.0).toDouble();
+        lineR[idxR] = (inR + (pingPong ? delayedL : delayedR) * fb).clamp(-1.0,1.0).toDouble();
       }
     }
     final pcm = BytesBuilder();
     for (var f=0;f<totalFrames;f++) {
-      for (var c=0;c<ch;c++) {
+      for (var c=0;c<outputChannels;c++) {
         final sample = (output[c][f].clamp(-1.0,0.999969) * 32768).round();
         final b = ByteData(2)..setInt16(0,sample,Endian.little);
         pcm.add(b.buffer.asUint8List());
@@ -149,8 +157,8 @@ class WavEchoEngine {
     void txt(String s)=>result.add(s.codeUnits);
     void u16(int n){final b=ByteData(2)..setUint16(0,n,Endian.little);result.add(b.buffer.asUint8List());}
     void u32(int n){final b=ByteData(4)..setUint32(0,n,Endian.little);result.add(b.buffer.asUint8List());}
-    txt('RIFF');u32(36+payload.length);txt('WAVE');txt('fmt ');u32(16);u16(1);u16(ch);
-    u32(rate);u32(rate*ch*2);u16(ch*2);u16(16);txt('data');u32(payload.length);result.add(payload);
+    txt('RIFF');u32(36+payload.length);txt('WAVE');txt('fmt ');u32(16);u16(1);u16(outputChannels);
+    u32(rate);u32(rate*outputChannels*2);u16(outputChannels*2);u16(16);txt('data');u32(payload.length);result.add(payload);
     await outputDirectory.create(recursive:true);
     final safe = input.uri.pathSegments.last.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
     final file=File('${outputDirectory.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_$safe');
