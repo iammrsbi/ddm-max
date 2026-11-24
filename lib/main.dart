@@ -48,7 +48,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   double playbackVolume=1.0,ancLevel=65;
   String? recordingPath;
 
-  @override void initState(){super.initState();_loadLibrary(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st!=PlayerState.playing);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
+  @override void initState(){super.initState();_loadLibrary(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st==PlayerState.paused);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
   Future<void> _loadLibrary() async {
     final prefs=await SharedPreferences.getInstance();
     final paths=prefs.getStringList('ddm_naat_library')??[];
@@ -348,11 +348,11 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget roundModeDial(){
     final name=delayModeNames[delayMode];
     return Center(child:GestureDetector(
-      onTap:()=>_changeLive(()=>{delayMode=(delayMode+1)%delayModeNames.length,dual=delayMode==5}),
+      onTap:()=>_changeLive(() { delayMode=(delayMode+1)%delayModeNames.length; dual=delayMode==5; }),
       onVerticalDragUpdate:(details){
         if(details.delta.dy.abs()>2){
           final step=details.delta.dy>0?1:-1;
-          _changeLive(()=>{delayMode=(delayMode+step+delayModeNames.length)%delayModeNames.length,dual=delayMode==5});
+          _changeLive(() { delayMode=(delayMode+step+delayModeNames.length)%delayModeNames.length; dual=delayMode==5; });
         }
       },
       child:Container(width:132,height:132,decoration:BoxDecoration(
@@ -383,20 +383,101 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
         Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,letterSpacing:.6)),
         const SizedBox(height:3),
-        Text(active?'ON':'OFF',style:TextStyle(fontFamily:'monospace',fontSize:22,
+        Text(active?'01':'00',style:TextStyle(fontFamily:'monospace',fontSize:24,
           fontWeight:FontWeight.w900,color:active?color:Colors.white54)),
+        Text(active?'ON':'OFF',style:const TextStyle(fontSize:8,color:Colors.white54,letterSpacing:1)),
       ]),
     ),
   );
 
-  Widget noiseControlCard()=>box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    const Row(children:[Icon(Icons.graphic_eq,color:green,size:25),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.7))]),
-    const SizedBox(height:5),
-    sw('ANC / NOISE REDUCTION',noiseReduction,(v)=>_changeLive(()=>noiseReduction=v)),
-    slider('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}%',(v)=>_changeLive(()=>ancLevel=v)),
-    sw('NOISE GATE',noiseGate,(v)=>_changeLive(()=>noiseGate=v)),
-    const Text('Software mic noise reduction • 0–100%',style:TextStyle(color:Colors.white60,fontSize:10)),
-  ]));
+  Widget filePage()=>scroll([
+    title('PICK FILE • DIGITAL DELAY','Upload audio • Apply effect • Listen • Export WAV'),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Icon(Icons.audio_file,color:gold,size:38),
+      Text(selected?.path.split('/').last??'NO FILE SELECTED',textAlign:TextAlign.center,maxLines:2,
+        overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900)),
+      const SizedBox(height:5),
+      Text('TOTAL LENGTH  ${_time(fileDuration)}',textAlign:TextAlign.center,
+        style:const TextStyle(color:green,fontFamily:'monospace',fontSize:18,fontWeight:FontWeight.w900)),
+      const SizedBox(height:9),
+      action(Icons.folder_open,'PICK AUDIO FILE',()=>chooseAudio()),
+      const SizedBox(height:8),
+      Row(children:[
+        Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),
+        const SizedBox(width:6),
+        Expanded(child:outlined(playbackPaused?Icons.play_arrow:Icons.pause,playbackPaused?'RESUME':'PAUSE',togglePause)),
+        const SizedBox(width:6),
+        Expanded(child:outlined(Icons.stop,'STOP',stop)),
+      ]),
+      Slider(value:fileDuration.inMilliseconds<=0?0:filePosition.inMilliseconds.clamp(0,fileDuration.inMilliseconds).toDouble(),
+        min:0,max:fileDuration.inMilliseconds<=0?1:fileDuration.inMilliseconds.toDouble(),
+        onChanged:fileDuration==Duration.zero?null:(v)=>player.seek(Duration(milliseconds:v.round()))),
+      Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+        Text(_time(filePosition),style:const TextStyle(color:gold,fontFamily:'monospace')),
+        Text(_time(fileDuration),style:const TextStyle(color:Colors.white60,fontFamily:'monospace')),
+      ]),
+      sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
+    ])),
+    box(Column(children:[
+      const Text('DD-8 • FOUR DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const SizedBox(height:12),
+      Row(children:[
+        Expanded(child:roundDial('ECHO',mix,0,100,'${mix.round()}','%',(v)=>setState(()=>mix=v))),
+        const SizedBox(width:8),
+        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(()=>feedback=v))),
+      ]),
+      const SizedBox(height:12),
+      Row(children:[
+        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(()=>delayTime=v))),
+        const SizedBox(width:8),
+        Expanded(child:roundModeDial()),
+      ]),
+    ])),
+    noiseControlCard(),
+    box(Row(children:[
+      Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),
+      const SizedBox(width:10),
+      Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass))),
+    ])),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      FilledButton.icon(
+        onPressed:working||selected==null?null:auditionEffect,
+        icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.graphic_eq),
+        label:Text(working?'CONVERTING / APPLYING EFFECT...':'APPLY EFFECT & LISTEN'),
+        style:FilledButton.styleFrom(shape:const StadiumBorder(),padding:const EdgeInsets.symmetric(vertical:14))),
+      const SizedBox(height:8),
+      outlined(Icons.play_circle,'PLAY PROCESSED WAV',()=>play(processed)),
+      const SizedBox(height:5),
+      outlined(Icons.share,'EXPORT / SHARE WAV',()=>shareFile(processed)),
+      if(processed!=null)Padding(padding:const EdgeInsets.only(top:8),
+        child:Text('READY: ${processed!.path.split('/').last}',style:const TextStyle(color:green,fontSize:10))),
+    ])),
+    const Text('MP3, M4A, AAC, OGG and WAV are supported when the Android decoder can read the file. Effect output is always WAV.',
+      style:TextStyle(color:Colors.white60,fontSize:10)),
+  ]);
+
+  Widget noiseControlCard({bool live=false}) {
+    void update(VoidCallback change) {
+      if (live) { _changeLive(change); } else { setState(change); }
+    }
+    return box(Column(children:[
+      const Row(children:[Icon(Icons.graphic_eq,color:green,size:24),SizedBox(width:8),
+        Text('ANC • MIC NOISE REDUCTION',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.6))]),
+      const SizedBox(height:10),
+      Row(children:[
+        Expanded(child:roundToggle('ANC',noiseReduction,green,()=>update(()=>noiseReduction=!noiseReduction))),
+        const SizedBox(width:10),
+        Expanded(child:roundDial('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}','%',(v)=>update(()=>ancLevel=v))),
+      ]),
+      const SizedBox(height:7),
+      Row(children:[
+        const Expanded(child:Text('NOISE GATE',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900))),
+        Switch(value:noiseGate,activeColor:green,onChanged:(v)=>update(()=>noiseGate=v)),
+      ]),
+      const Text('Android NoiseSuppressor (if available) + speech filtering + adaptive gate.',
+        style:TextStyle(color:Colors.white60,fontSize:9)),
+    ]));
+  }
   Widget libraryPage()=>scroll([
     title('NAAT COLLECTION','Hadaiq-e-Bakhshish Hindi book aur apni Naat audio files.'),
     box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
