@@ -5,6 +5,9 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.AudioManager
+import android.media.audiofx.NoiseSuppressor
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
 import kotlin.math.max
 
 class LiveAudioEngine {
@@ -12,6 +15,13 @@ class LiveAudioEngine {
     private var recorder: AudioRecord? = null
     private var track: AudioTrack? = null
     private var worker: Thread? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var echoCanceler: AcousticEchoCanceler? = null
+    private var gainController: AutomaticGainControl? = null
+    @Volatile var noiseSuppressorActive: Boolean = false
+        private set
+    @Volatile var echoCancelerActive: Boolean = false
+        private set
 
     @Synchronized fun start(delayMs: Int, feedback: Double, mix: Double, level: Double, noiseReduction: Boolean, noiseGate: Boolean, ancLevel: Double) {
         stop()
@@ -20,13 +30,34 @@ class LiveAudioEngine {
         val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minIn <= 0 || minOut <= 0) throw IllegalStateException("Audio device unavailable")
         val size = max(4096, max(minIn, minOut))
-        val input = AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
+        val input = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
         val output = AudioTrack(AudioManager.STREAM_MUSIC, rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, size, AudioTrack.MODE_STREAM)
         if (input.state != AudioRecord.STATE_INITIALIZED || output.state != AudioTrack.STATE_INITIALIZED) {
             input.release(); output.release()
             throw IllegalStateException("Mic ya speaker initialize nahi hua")
         }
         recorder = input; track = output
+        // Enable Android device voice-processing effects when available.
+        try {
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor = NoiseSuppressor.create(input.audioSessionId)
+                noiseSuppressor?.enabled = true
+                noiseSuppressorActive = noiseSuppressor?.enabled == true
+            }
+        } catch (_: Exception) { noiseSuppressorActive = false }
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                echoCanceler = AcousticEchoCanceler.create(input.audioSessionId)
+                echoCanceler?.enabled = true
+                echoCancelerActive = echoCanceler?.enabled == true
+            }
+        } catch (_: Exception) { echoCancelerActive = false }
+        try {
+            if (AutomaticGainControl.isAvailable()) {
+                gainController = AutomaticGainControl.create(input.audioSessionId)
+                gainController?.enabled = true
+            }
+        } catch (_: Exception) {}
         val delaySamples = max(1, rate * delayMs.coerceIn(40,1200) / 1000)
         val ring = FloatArray(delaySamples)
         val fb = feedback.coerceIn(0.0,0.92).toFloat()
@@ -69,6 +100,11 @@ class LiveAudioEngine {
         worker=null
         try { recorder?.stop() } catch (_: Exception) {}
         try { track?.pause(); track?.flush(); track?.stop() } catch (_: Exception) {}
+        try { noiseSuppressor?.release() } catch (_: Exception) {}
+        try { echoCanceler?.release() } catch (_: Exception) {}
+        try { gainController?.release() } catch (_: Exception) {}
+        noiseSuppressor=null; echoCanceler=null; gainController=null
+        noiseSuppressorActive=false; echoCancelerActive=false
         recorder?.release(); track?.release(); recorder=null; track=null
     }
 }
