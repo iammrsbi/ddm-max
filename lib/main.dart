@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,14 +30,15 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
   double level=80,feedback=38,delayTime=320,mix=45;
   final List<double> eq=[0,0,0,0,0];
-  bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false;
+  bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false,liveMonitoring=false;
+  static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
   File? selected,processed,recorded;
   final List<File> library=[];
   String? recordingPath;
 
-  @override void dispose(){player.dispose();recorder.dispose();super.dispose();}
+  @override void dispose(){liveChannel.invokeMethod('stop');player.dispose();recorder.dispose();super.dispose();}
 
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
   Future<void> chooseAudio({bool forLibrary=false}) async {
@@ -65,6 +68,21 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       setState(()=>processed=out);note('Processed WAV save ho gayi.');
     }catch(e){note('Processing error: $e');}
     finally{if(mounted)setState(()=>working=false);}
+  }
+  Future<void> toggleLiveMonitor() async {
+    try {
+      if(liveMonitoring) {
+        await liveChannel.invokeMethod('stop');
+        if(mounted)setState(()=>liveMonitoring=false);
+        note('Live mic effect band ho gaya.');
+        return;
+      }
+      final permission=await Permission.microphone.request();
+      if(!permission.isGranted){note('Microphone permission allow karo.');return;}
+      await liveChannel.invokeMethod('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100});
+      if(mounted)setState(()=>liveMonitoring=true);
+      note('Live mic delay chalu. Headphones use karo.');
+    } catch(e) { note('Live mic start nahi hua: $e'); }
   }
   Future<void> startRecording() async {
     try{
@@ -179,9 +197,15 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Icon(recording?Icons.fiber_manual_record:Icons.mic,size:64,color:recording?Colors.redAccent:gold),
       Text(recording?'RECORDING NOW':'MICROPHONE READY',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1)),
       const SizedBox(height:12),
+      SizedBox(width:double.infinity,child:OutlinedButton.icon(
+        onPressed:recording?null:toggleLiveMonitor,
+        icon:Icon(liveMonitoring?Icons.stop_circle:Icons.hearing),
+        label:Text(liveMonitoring?'STOP LIVE MIC EFFECT':'START LIVE MIC EFFECT'),
+      )),
+      const SizedBox(height:8),
       SizedBox(width:double.infinity,child:FilledButton.icon(
         style:FilledButton.styleFrom(backgroundColor:recording?Colors.red.shade700:green,foregroundColor:Colors.black),
-        onPressed:recording?stopRecording:startRecording,
+        onPressed:recording?stopRecording:() async {if(liveMonitoring) await toggleLiveMonitor(); await startRecording();},
         icon:Icon(recording?Icons.stop:Icons.fiber_manual_record),label:Text(recording?'STOP & SAVE RECORDING':'START RECORDING'))),
       const SizedBox(height:8),Text(recorded?.path.split('/').last??'No recording saved yet',style:const TextStyle(color:Colors.white60,fontSize:11)),
       Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY RECORDING',()=>play(recorded))),const SizedBox(width:7),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
