@@ -20,7 +20,8 @@ class MainActivity : FlutterActivity() {
             call.argument<Boolean>("dual") ?: false,
             call.argument<Boolean>("pingPong") ?: false,
             call.argument<Boolean>("bypass") ?: false,
-            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0)
+            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0),
+            call.argument<Int>("mode") ?: 0
         )
     }
 
@@ -41,7 +42,8 @@ class MainActivity : FlutterActivity() {
                             call.argument<Boolean>("dual") ?: false,
                             call.argument<Boolean>("pingPong") ?: false,
                             call.argument<Boolean>("bypass") ?: false,
-                            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0)
+                            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0),
+                            call.argument<Int>("mode") ?: 0
                         )
                         result.success(mapOf(
                             "noiseSuppressor" to liveAudioEngine.noiseSuppressorActive,
