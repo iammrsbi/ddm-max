@@ -90,16 +90,44 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Future<void> auditionEffect() async {await process(selected);if(processed!=null)await play(processed);}
 
   Future<void> stop() async {await player.stop();}
+  Future<File> _decodeUploadedAudio(File source) async {
+    final d = await getApplicationDocumentsDirectory();
+    final dir = Directory('${d.path}/DDM-MAX/Converted');
+    await dir.create(recursive: true);
+    final output = File('${dir.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_CONVERTED.wav');
+    await liveChannel.invokeMethod<String>('decodeToWav', {
+      'inputPath': source.path,
+      'outputPath': output.path,
+    });
+    if (!await output.exists() || await output.length() < 44) {
+      throw const FormatException('Audio convert nahi ho payi. Dusri audio file try karo.');
+    }
+    return output;
+  }
+
   Future<void> process(File? source) async {
-    if(source==null){note('Pehle audio file select ya record karo.');return;}
+    if(source==null){note('Pehle audio file select karo.');return;}
+    if(working)return;
     setState(() { working = true; processed = null; });
     try{
       final d=await getApplicationDocumentsDirectory();
-      final out=await WavEchoEngine.render(input:source,outputDirectory:Directory('${d.path}/DDM-MAX'),
-        delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
-        eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
+      final outputDir=Directory('${d.path}/DDM-MAX');
+      File renderInput=source;
+      File out;
+      try {
+        out=await WavEchoEngine.render(input:renderInput,outputDirectory:outputDir,
+          delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
+          eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
+      } on FormatException {
+        note('Audio convert ho rahi hai...');
+        renderInput=await _decodeUploadedAudio(source);
+        out=await WavEchoEngine.render(input:renderInput,outputDirectory:outputDir,
+          delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
+          eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
+      }
       if(!mounted)return;
-      setState(()=>processed=out);note('Processed WAV save ho gayi.');
+      setState(()=>processed=out);
+      note('Effect apply ho gaya. Processed WAV ready hai.');
     }catch(e){note('Processing error: $e');}
     finally{if(mounted)setState(()=>working=false);}
   }
