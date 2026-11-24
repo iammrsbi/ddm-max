@@ -58,6 +58,7 @@ class LiveAudioEngine {
         bypassValue = bypass
         modeValue = mode.coerceIn(0, 5)
         eqGains = FloatArray(5) { i -> (eq.getOrNull(i) ?: 0.0).coerceIn(-12.0, 12.0).toFloat() }
+        try { noiseSuppressor?.enabled = noiseReduction } catch (_: Exception) {}
     }
 
     @Synchronized fun start(
@@ -85,7 +86,7 @@ class LiveAudioEngine {
         try {
             if (NoiseSuppressor.isAvailable()) {
                 noiseSuppressor = NoiseSuppressor.create(input.audioSessionId)
-                noiseSuppressor?.enabled = true
+                noiseSuppressor?.enabled = noiseReductionValue
                 noiseSuppressorActive = noiseSuppressor?.enabled == true
             }
         } catch (_: Exception) { noiseSuppressorActive = false }
