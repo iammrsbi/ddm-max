@@ -192,7 +192,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     return Scaffold(
       body:Stack(fit:StackFit.expand,children:[
         Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF07110E))),
-        Container(color:const Color(0xE607100D)),
+        Container(color:const Color(0xA807100D)),
         SafeArea(child:Column(children:[header(),Expanded(child:pages[tab])])),
       ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
@@ -216,7 +216,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     Text(b,style:const TextStyle(fontSize:10,color:Colors.white60)),
   ]));
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
-    decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(17),border:Border.all(color:Colors.white.withOpacity(.13))),child:c);
+    decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(23),border:Border.all(color:Colors.white.withOpacity(.16))),child:c);
   Widget delayPage()=>scroll([
     title('LIVE MIC','Real-time digital delay • headphones recommended'),
     box(Column(children:[
@@ -227,15 +227,15 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ])),
     box(Column(children:[
       Row(children:[
-        Expanded(child:ledMetric('DELAY TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>_changeLive(()=>delayTime=v))),
+        Expanded(child:ledMetric('ECHO','${mix.round()}','%',mix,0,100,(v)=>_changeLive(()=>mix=v))),
         const SizedBox(width:7),
-        Expanded(child:ledMetric('FEEDBACK','${feedback.round()}','%',feedback,0,92,(v)=>_changeLive(()=>feedback=v))),
+        Expanded(child:ledMetric('F.BACK','${feedback.round()}','%',feedback,0,92,(v)=>_changeLive(()=>feedback=v))),
       ]),
       const SizedBox(height:8),
       Row(children:[
-        Expanded(child:ledMetric('LEVEL','${level.round()}','%',level,0,100,(v)=>_changeLive(()=>level=v))),
+        Expanded(child:ledMetric('TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>_changeLive(()=>delayTime=v))),
         const SizedBox(width:7),
-        Expanded(child:ledMetric('MIX','${mix.round()}','%',mix,0,100,(v)=>_changeLive(()=>mix=v))),
+        Expanded(child:modeMetric(onToggle:()=>_changeLive(()=>dual=!dual))),
       ]),
     ])),
     noiseControlCard(),
@@ -252,7 +252,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
     Widget ledMetric(String label,String value,String unit,double current,double min,double max,ValueChanged<double> changed)=>Container(
     padding:const EdgeInsets.symmetric(horizontal:7,vertical:10),
-    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(14),border:Border.all(color:green.withOpacity(.85),width:1.3),boxShadow:[BoxShadow(color:green.withOpacity(.18),blurRadius:10)]),
+    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(20),border:Border.all(color:green.withOpacity(.95),width:1.5),boxShadow:[BoxShadow(color:green.withOpacity(.18),blurRadius:10)]),
     child:Column(children:[
       Text(label,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.8)),
       const SizedBox(height:4),
@@ -263,9 +263,26 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Slider(value:current.clamp(min,max).toDouble(),min:min,max:max,onChanged:changed),
     ]),
   );
+  Widget modeMetric({required VoidCallback onToggle})=>Container(
+    padding:const EdgeInsets.symmetric(horizontal:10,vertical:9),
+    decoration:BoxDecoration(color:const Color(0xF4081710),borderRadius:BorderRadius.circular(20),
+      border:Border.all(color:Colors.lightBlueAccent.withOpacity(.85),width:1.3),
+      boxShadow:[BoxShadow(color:Colors.lightBlueAccent.withOpacity(.16),blurRadius:10)]),
+    child:Column(children:[
+      const Text('MODE',style:TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:1)),
+      const SizedBox(height:2),
+      Text(dual?'02':'01',style:const TextStyle(fontFamily:'monospace',fontSize:30,fontWeight:FontWeight.w900,
+        color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:12)])),
+      SizedBox(width:double.infinity,height:30,child:FilledButton(
+        onPressed:onToggle,
+        style:FilledButton.styleFrom(backgroundColor:dual?Colors.lightBlueAccent:green,foregroundColor:Colors.black,
+          padding:EdgeInsets.zero,shape:const StadiumBorder()),
+        child:Text(dual?'DUAL':'SINGLE',style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900)))),
+    ]),
+  );
   Widget neonMode(String label,bool active,Color color,VoidCallback fn)=>SizedBox(width:double.infinity,height:54,child:OutlinedButton(
     onPressed:fn,
-    style:OutlinedButton.styleFrom(backgroundColor:active?color.withOpacity(.2):Colors.black54,foregroundColor:active?color:Colors.white,side:BorderSide(color:active?color:Colors.white30,width:active?2:1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(13)),shadowColor:color,elevation:active?8:0),
+    style:OutlinedButton.styleFrom(backgroundColor:active?color.withOpacity(.2):Colors.black54,foregroundColor:active?color:Colors.white,side:BorderSide(color:active?color:Colors.white30,width:active?2:1),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),shadowColor:color,elevation:active?8:0),
     child:Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,letterSpacing:.7)),
   ));
   Widget filePage()=>scroll([
@@ -291,19 +308,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ])),
     box(Column(children:[
       const Text('DIGITAL DELAY • EFFECT CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
-      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
-      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
-      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
-      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
-      Row(children:[Expanded(child:neonMode('SINGLE',!dual,green,()=>setState(()=>dual=false))),const SizedBox(width:6),Expanded(child:neonMode('DUAL',dual,Colors.lightBlueAccent,()=>setState(()=>dual=true)))]),
+      slider('ECHO',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
+      slider('F.BACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
+      slider('TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
+      modeMetric(onToggle:()=>setState(()=>dual=!dual)),
       const SizedBox(height:6),
       Row(children:[Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),const SizedBox(width:6),Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass)))]),
     ])),
+    noiseControlCard(),
     box(Column(children:[
       const Text('5-BAND EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
       for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>setState(()=>eq[i]=v)),
-      sw('NOISE REDUCTION FILTER',noiseReduction,(v)=>setState(()=>noiseReduction=v)),
-      sw('NOISE GATE',noiseGate,(v)=>setState(()=>noiseGate=v)),
     ])),
     box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       FilledButton.icon(onPressed:working||selected==null?null:auditionEffect,icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.headphones),label:Text(working?'PROCESSING...':'AUDITION CURRENT EFFECT')),
