@@ -250,7 +250,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     return Scaffold(
       body:Stack(fit:StackFit.expand,children:[
         Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF07110E))),
-        Container(color:const Color(0xA807100D)),
+        Container(color:const Color(0x5507100D)),
         SafeArea(child:Column(children:[header(),Expanded(child:pages[tab])])),
       ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
@@ -349,12 +349,6 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     final name=delayModeNames[delayMode];
     return Center(child:GestureDetector(
       onTap:()=>_changeLive(() { delayMode=(delayMode+1)%delayModeNames.length; dual=delayMode==5; }),
-      onVerticalDragUpdate:(details){
-        if(details.delta.dy.abs()>2){
-          final step=details.delta.dy>0?1:-1;
-          _changeLive(() { delayMode=(delayMode+step+delayModeNames.length)%delayModeNames.length; dual=delayMode==5; });
-        }
-      },
       child:Container(width:132,height:132,decoration:BoxDecoration(
         shape:BoxShape.circle,gradient:const RadialGradient(colors:[Color(0xFF243B34),Color(0xFF050B08)]),
         border:Border.all(color:Colors.lightBlueAccent,width:2),
@@ -367,7 +361,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
             shadows:[Shadow(color:green,blurRadius:12)])),
           Text(name,style:const TextStyle(color:gold,fontSize:9,fontWeight:FontWeight.w900)),
           const SizedBox(height:3),
-          const Text('TAP / DRAG',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:.7)),
+          const Text('TAP TO CHANGE',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:.7)),
         ]),
       ),
     ));
