@@ -62,19 +62,22 @@ class WavEchoEngine {
     final cleaned = List<Float64List>.generate(ch, (c) {
       final out = Float64List(totalFrames);
       final strength = ancLevel.clamp(0.0, 1.0).toDouble();
-      final rc = 1.0 / (2.0 * math.pi * 85.0);
-      final dt = 1.0 / rate;
-      final alpha = rc / (rc + dt);
-      double previousInput = 0, previousHigh = 0;
+      final cutoffHz = 75.0 + 135.0 * strength;
+      final alpha = 1.0 / (1.0 + 2.0 * math.pi * cutoffHz / rate);
+      double previousInput = 0, previousHigh = 0, gateGain = 1.0;
       for (var i = 0; i < frames; i++) {
         final x = dry[c][i];
         final high = noiseReduction ? alpha * (previousHigh + x - previousInput) : x;
         previousInput = x; previousHigh = high;
         final filtered = x * (1.0 - strength) + high * strength;
-        final threshold = 0.004 + 0.018 * strength;
+        final threshold = 0.0018 + 0.009 * strength;
         final magnitude = filtered.abs();
-        final gate = !noiseGate ? 1.0 : (magnitude < threshold ? 0.10 : (magnitude < threshold * 2.2 ? 0.10 + (magnitude - threshold) / (threshold * 1.2) * 0.90 : 1.0));
-        out[i] = filtered * gate;
+        final targetGate = !noiseGate ? 1.0 : (magnitude < threshold
+            ? 0.06
+            : (magnitude < threshold * 2.0 ? 0.06 + (magnitude - threshold) / threshold * 0.94 : 1.0));
+        final smoothing = targetGate < gateGain ? 0.24 : 0.035;
+        gateGain += (targetGate - gateGain) * smoothing;
+        out[i] = filtered * gateGain;
       }
       return out;
     });
