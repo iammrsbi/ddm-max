@@ -327,7 +327,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       outlined(Icons.share,'SHARE / EXPORT PROCESSED WAV',()=>shareFile(processed)),
       if(processed!=null)Text('Output: ${processed!.path.split('/').last}',style:const TextStyle(color:green,fontSize:10)),
     ])),
-    const Text('Effect processing currently supports PCM 16-bit mono/stereo WAV. Other formats may play, but must be converted to WAV before applying effects.',style:TextStyle(color:Colors.orangeAccent,fontSize:10)),
+    const Text('MP3 / AAC / M4A / OGG aur WAV files ko pehle device decoder se PCM WAV mein convert karke effect apply kiya jata hai. Kuch unsupported ya DRM-protected files decode nahi hongi.',style:TextStyle(color:Colors.orangeAccent,fontSize:10)),
   ]);
 
     Widget eqPage()=>scroll([
