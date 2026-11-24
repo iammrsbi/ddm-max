@@ -56,6 +56,22 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         result.error("LIVE_AUDIO_UPDATE", e.message, null)
                     }
+                    "decodeToWav" -> {
+                        val inputPath = call.argument<String>("inputPath")
+                        val outputPath = call.argument<String>("outputPath")
+                        if (inputPath.isNullOrBlank() || outputPath.isNullOrBlank()) {
+                            result.error("AUDIO_DECODE_ARGS", "Input/output path missing", null)
+                        } else {
+                            Thread {
+                                try {
+                                    AudioTranscoder.decodeToWav(inputPath, outputPath)
+                                    runOnUiThread { result.success(outputPath) }
+                                } catch (e: Exception) {
+                                    runOnUiThread { result.error("AUDIO_DECODE_FAILED", e.message, null) }
+                                }
+                            }.apply { name = "DDM-Audio-Decoder"; start() }
+                        }
+                    }
                     "stop" -> {
                         liveAudioEngine.stop()
                         result.success(true)
