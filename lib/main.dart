@@ -55,30 +55,70 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   @override void dispose(){liveChannel.invokeMethod('stop');player.dispose();recorder.dispose();super.dispose();}
 
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
+  Future<File> _copyPickedAudio(PlatformFile picked) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final folder = Directory('${docs.path}/DDM-MAX/Imported');
+    await folder.create(recursive: true);
+    final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final destination = File('${folder.path}/${DateTime.now().microsecondsSinceEpoch}_$safeName');
+
+    // Copy into app-private storage immediately so temporary picker paths cannot expire.
+    if (picked.path != null) {
+      final source = File(picked.path!);
+      if (await source.exists()) {
+        try { await source.copy(destination.path); } catch (_) {}
+      }
+    }
+    if (!await destination.exists() && picked.readStream != null) {
+      final sink = destination.openWrite();
+      try {
+        await sink.addStream(picked.readStream!);
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+    }
+    if (!await destination.exists() && picked.bytes != null) {
+      await destination.writeAsBytes(picked.bytes!, flush: true);
+    }
+    if (!await destination.exists() || await destination.length() == 0) {
+      throw const FileSystemException('Selected audio file could not be copied into app storage.');
+    }
+    return destination;
+  }
+
   Future<void> chooseAudio({bool forLibrary=false}) async {
     try {
-      final r=await FilePicker.platform.pickFiles(type:FileType.audio,allowMultiple:false,withReadStream:true);
-      if(r==null||r.files.isEmpty)return;
-      final picked=r.files.single;
-      File f;
-      if(picked.path!=null){
-        f=File(picked.path!);
-      }else if(picked.readStream!=null){
-        final d=await getApplicationDocumentsDirectory();
-        final imports=Directory('${d.path}/DDM-MAX/Imported');
-        await imports.create(recursive:true);
-        final safe=picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
-        f=File('${imports.path}/${DateTime.now().millisecondsSinceEpoch}_$safe');
-        await picked.readStream!.pipe(f.openWrite());
-      }else{
-        note('Phone se file ka path nahi mila. Dobara file select karo.');
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio, allowMultiple: false, withReadStream: true, withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = await _copyPickedAudio(result.files.single);
+
+      if (forLibrary) {
+        if (!library.any((item) => item.path == file.path)) setState(() => library.add(file));
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList('ddm_naat_library', library.map((item) => item.path).toList());
+        note('Audio collection mein add ho gayi.');
         return;
       }
-      setState((){if(forLibrary){if(!library.any((x)=>x.path==f.path))library.add(f);}else{selected=f;processed=null;fileDuration=Duration.zero;filePosition=Duration.zero;}});
-      if(!forLibrary){try{await player.stop();await player.setSource(DeviceFileSource(f.path));fileDuration=await player.getDuration()??Duration.zero;}catch(_){} if(mounted)setState((){});}
-      if(forLibrary){final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());}
-      note('Audio file select ho gayi.');
-    }catch(e){note('File select error: $e');}
+
+      await player.stop();
+      setState(() {
+        selected = file; processed = null;
+        fileDuration = Duration.zero; filePosition = Duration.zero; playbackPaused = false;
+      });
+      try {
+        await player.setSource(DeviceFileSource(file.path));
+        final duration = await player.getDuration();
+        if (mounted && duration != null) setState(() => fileDuration = duration);
+      } catch (_) {
+        note('File import ho gayi. Preview codec support nahi mila; APPLY EFFECT try karo.');
+      }
+      note('File app mein copy ho gayi. Ab APPLY EFFECT dabao.');
+    } catch (e) {
+      note('File upload error: $e');
+    }
   }
   Future<void> play(File? f) async {
     if(f==null){note('Pehle audio file select karo.');return;}
@@ -91,45 +131,60 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
   Future<void> stop() async {await player.stop();}
   Future<File> _decodeUploadedAudio(File source) async {
-    final d = await getApplicationDocumentsDirectory();
-    final dir = Directory('${d.path}/DDM-MAX/Converted');
+    if (!await source.exists() || await source.length() == 0) {
+      throw const FormatException('Uploaded audio file missing ya empty hai.');
+    }
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory('${docs.path}/DDM-MAX/Converted');
     await dir.create(recursive: true);
-    final output = File('${dir.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_CONVERTED.wav');
-    await liveChannel.invokeMethod<String>('decodeToWav', {
-      'inputPath': source.path,
-      'outputPath': output.path,
-    });
+    final output = File('${dir.path}/${DateTime.now().microsecondsSinceEpoch}_DDM_CONVERTED.wav');
+    try {
+      await liveChannel.invokeMethod<String>('decodeToWav', {
+        'inputPath': source.path, 'outputPath': output.path,
+      });
+    } on PlatformException catch (error) {
+      throw FormatException(error.message ?? 'Android audio decoder failed (${error.code}).');
+    }
     if (!await output.exists() || await output.length() < 44) {
-      throw const FormatException('Audio convert nahi ho payi. Dusri audio file try karo.');
+      throw const FormatException('Audio PCM WAV mein convert nahi ho payi. DRM ya unsupported codec ho sakta hai.');
     }
     return output;
   }
 
   Future<void> process(File? source) async {
-    if(source==null){note('Pehle audio file select karo.');return;}
-    if(working)return;
+    if (source == null) { note('Pehle PICK AUDIO FILE se file upload karo.'); return; }
+    if (working) return;
+    if (!await source.exists() || await source.length() == 0) {
+      note('Uploaded file available nahi hai. Dobara upload karo.');
+      return;
+    }
     setState(() { working = true; processed = null; });
-    try{
-      final d=await getApplicationDocumentsDirectory();
-      final outputDir=Directory('${d.path}/DDM-MAX');
-      File renderInput=source;
-      File out;
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final outputDir = Directory('${docs.path}/DDM-MAX/Processed');
+      await outputDir.create(recursive: true);
+      File pcmWav = source;
       try {
-        out=await WavEchoEngine.render(input:renderInput,outputDirectory:outputDir,
-          delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
-          eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
+        await WavEchoEngine.validate(input: source);
       } on FormatException {
-        note('Audio convert ho rahi hai...');
-        renderInput=await _decodeUploadedAudio(source);
-        out=await WavEchoEngine.render(input:renderInput,outputDirectory:outputDir,
-          delayMs:delayTime.round(),feedback:feedback/100,mix:mix/100,level:level/100,
-          eq:eq,pingPong:pingPong,dual:dual,bypass:bypass,noiseReduction:noiseReduction,noiseGate:noiseGate,ancLevel:ancLevel/100);
+        note('Audio decode/convert ho rahi hai...');
+        pcmWav = await _decodeUploadedAudio(source);
       }
-      if(!mounted)return;
-      setState(()=>processed=out);
-      note('Effect apply ho gaya. Processed WAV ready hai.');
-    }catch(e){note('Processing error: $e');}
-    finally{if(mounted)setState(()=>working=false);}
+      final output = await WavEchoEngine.render(
+        input: pcmWav, outputDirectory: outputDir,
+        delayMs: delayTime.round(), feedback: feedback / 100,
+        mix: mix / 100, level: level / 100, eq: eq,
+        pingPong: pingPong, dual: dual, bypass: bypass,
+        noiseReduction: noiseReduction, noiseGate: noiseGate, ancLevel: ancLevel / 100,
+      );
+      if (!mounted) return;
+      setState(() => processed = output);
+      note('Effect apply ho gaya. WAV file ready hai — ab Play Processed dabao.');
+    } catch (e) {
+      if (mounted) note('Effect apply nahi hua: $e');
+    } finally {
+      if (mounted) setState(() => working = false);
+    }
   }
   Future<void> toggleLiveMonitor() async {
     try {
