@@ -1,4 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
 const green = Color(0xFF20C878);
@@ -32,6 +37,63 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   double level = 70, feedback = 42, delayTime = 360, mix = 35;
   double bass = 0, lowMid = 0, mid = 0, highMid = 0, treble = 0;
   bool bypass = false, pingPong = false, dual = false, liveMic = false, loop = false, recording = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  File? _selectedAudio;
+  File? _echoAudio;
+  bool _working = false;
+  bool _isPlaying = false;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAudio() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['wav']);
+      if (result == null || result.files.single.path == null) return;
+      await _audioPlayer.stop();
+      setState(() { _selectedAudio = File(result.files.single.path!); _echoAudio = null; _isPlaying = false; });
+      _notice('WAV file select ho gayi. Ab PLAY ya SAVE ECHO dabao.');
+    } catch (e) { _notice('File select nahi hui: $e'); }
+  }
+
+  Future<void> _playAudio({bool echo = false}) async {
+    final file = echo ? _echoAudio : _selectedAudio;
+    if (file == null) { _notice(echo ? 'Pehle SAVE ECHO banao.' : 'Pehle WAV file select karo.'); return; }
+    try {
+      await _audioPlayer.stop();
+      await _audioPlayer.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
+      await _audioPlayer.play(DeviceFileSource(file.path));
+      setState(() => _isPlaying = true);
+    } catch (e) { _notice('Audio play nahi hua: $e'); }
+  }
+
+  Future<void> _stopAudio() async {
+    await _audioPlayer.stop();
+    if (mounted) setState(() => _isPlaying = false);
+  }
+
+  Future<void> _makeEcho() async {
+    if (_selectedAudio == null) { _notice('Pehle WAV file select karo.'); return; }
+    setState(() => _working = true);
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final output = await WavEchoEngine.render(
+        input: _selectedAudio!, outputDirectory: Directory('${dir.path}/DDM-MAX'),
+        delayMs: delayTime.round(), feedback: feedback / 100,
+        mix: mix / 100, level: level / 100,
+      );
+      if (!mounted) return;
+      setState(() { _echoAudio = output; _working = false; });
+      _notice('Echo WAV save ho gayi: ${output.path}');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _working = false);
+      _notice('Echo process nahi hua: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,28 +179,45 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   ]);
 
   Widget _filePage() => _scroll([
-    _title('FILE ECHO', 'ADD DELAY EFFECT TO AN AUDIO FILE'),
+    _title('FILE ECHO', 'REAL WAV DELAY PROCESSOR'),
     _panel(Column(children: [
       const Icon(Icons.audio_file, size: 54, color: gold), const SizedBox(height: 10),
-      const Text('NO AUDIO SELECTED', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-      const SizedBox(height: 5), const Text('Choose an MP3 or WAV audio file', style: TextStyle(color: Colors.white60, fontSize: 11)),
+      Text(_selectedAudio == null ? 'NO AUDIO SELECTED' : _selectedAudio!.uri.pathSegments.last, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: .5)),
+      const SizedBox(height: 5), const Text('Select an uncompressed PCM 16-bit WAV file', textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 11)),
       const SizedBox(height: 15),
-      _action(Icons.folder_open, 'CHOOSE AUDIO FILE', false, () => _notice('File picker will be connected in the audio-engine stage.')),
+      _action(Icons.folder_open, 'CHOOSE WAV FILE', _selectedAudio != null, _working ? () {} : _pickAudio),
     ])),
     _panel(Column(children: [
-      _switch('REPEAT / LOOP', loop, (v) => setState(() => loop = v)),
+      _slider('DELAY TIME', delayTime, 40, 1200, delayTime.round().toString() + ' ms', (v) => setState(() => delayTime = v)),
+      _slider('FEEDBACK', feedback, 0, 92, feedback.round().toString() + '%', (v) => setState(() => feedback = v)),
+      _slider('EFFECT MIX', mix, 0, 100, mix.round().toString() + '%', (v) => setState(() => mix = v)),
+      _slider('OUTPUT LEVEL', level, 0, 100, level.round().toString() + '%', (v) => setState(() => level = v)),
+      _switch('REPEAT / LOOP PLAYBACK', loop, (v) => setState(() => loop = v)),
       const Divider(color: Colors.white12),
       Row(children: [
-        Expanded(child: _outline(Icons.play_arrow, 'PLAY', () => _notice('Select an audio file first.'))),
-        const SizedBox(width: 7), Expanded(child: _outline(Icons.stop, 'STOP', () => _notice('No audio is playing.'))),
-        const SizedBox(width: 7), Expanded(child: _outline(Icons.save_alt, 'SAVE ECHO', () => _notice('Echo export will be enabled with the audio engine.'))),
+        Expanded(child: _outline(Icons.play_arrow, 'PLAY ORIGINAL', () => _playAudio())),
+        const SizedBox(width: 7), Expanded(child: _outline(Icons.stop, 'STOP', _stopAudio)),
       ]),
+      const SizedBox(height: 9),
+      SizedBox(width: double.infinity, child: FilledButton.icon(
+        onPressed: _working ? null : _makeEcho,
+        icon: _working ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome),
+        label: Text(_working ? 'PROCESSING WAV...' : 'PROCESS & SAVE ECHO'),
+        style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 13)),
+      )),
+      const SizedBox(height: 8),
+      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+        onPressed: _echoAudio == null ? null : () => _playAudio(echo: true),
+        icon: const Icon(Icons.play_circle), label: const Text('PLAY PROCESSED ECHO'),
+      )),
+      if (_echoAudio != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Saved: ${_echoAudio!.uri.pathSegments.last}', textAlign: TextAlign.center, style: const TextStyle(color: green, fontSize: 10))),
     ])),
     _panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('BEFORE / AFTER', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1)),
       const SizedBox(height: 12),
-      Row(children: [Expanded(child: _compare('BEFORE', 'Original audio')), const SizedBox(width: 8), Expanded(child: _compare('AFTER', 'Echo effect'))]),
+      Row(children: [Expanded(child: _compare('BEFORE', _selectedAudio == null ? 'Original audio' : 'Original WAV selected')), const SizedBox(width: 8), Expanded(child: _compare('AFTER', _echoAudio == null ? 'Process echo first' : 'Echo file ready'))]),
     ])),
+    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('Note: This first working processor supports PCM 16-bit mono/stereo WAV. MP3 conversion and live microphone DSP are separate next steps.', style: TextStyle(color: Colors.white54, fontSize: 10))),
   ]);
 
   Widget _eqPage() => _scroll([
