@@ -21,7 +21,10 @@ class MainActivity : FlutterActivity() {
                             call.argument<Boolean>("noiseGate") ?: true,
                             call.argument<Double>("ancLevel") ?: 0.65
                         )
-                        result.success(true)
+                        result.success(mapOf(
+                            "noiseSuppressor" to liveAudioEngine.noiseSuppressorActive,
+                            "echoCanceler" to liveAudioEngine.echoCancelerActive
+                        ))
                     } catch (e: Exception) { result.error("LIVE_AUDIO_START", e.message, null) }
                     "stop" -> { liveAudioEngine.stop(); result.success(true) }
                     else -> result.notImplemented()
