@@ -92,7 +92,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Future<void> stop() async {await player.stop();}
   Future<void> process(File? source) async {
     if(source==null){note('Pehle audio file select ya record karo.');return;}
-    setState(()=>working=true);
+    setState(()=>{working=true;processed=null;});
     try{
       final d=await getApplicationDocumentsDirectory();
       final out=await WavEchoEngine.render(input:source,outputDirectory:Directory('${d.path}/DDM-MAX'),
