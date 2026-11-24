@@ -169,8 +169,10 @@ class WavEchoEngine {
         echoR = echoToneR;
       }
       if (mode == 2) {
-        echoL = math.tanh(echoL * 1.25);
-        echoR = math.tanh(echoR * 1.25);
+        final saturatedL = echoL * 1.25;
+        final saturatedR = echoR * 1.25;
+        echoL = saturatedL / (1.0 + saturatedL.abs() * 0.20);
+        echoR = saturatedR / (1.0 + saturatedR.abs() * 0.20);
       } else if (mode == 4) {
         final wobble = 0.88 + 0.12 * math.sin(2 * math.pi * f / (rate * 2.8));
         echoL *= wobble;
