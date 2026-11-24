@@ -6,6 +6,23 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val liveAudioEngine = LiveAudioEngine()
+
+    private fun applyAudioSettings(call: MethodChannel.MethodCall) {
+        liveAudioEngine.update(
+            call.argument<Int>("delayMs") ?: 320,
+            call.argument<Double>("feedback") ?: 0.38,
+            call.argument<Double>("mix") ?: 0.45,
+            call.argument<Double>("level") ?: 0.8,
+            call.argument<Boolean>("noiseReduction") ?: true,
+            call.argument<Boolean>("noiseGate") ?: true,
+            call.argument<Double>("ancLevel") ?: 0.65,
+            call.argument<Boolean>("dual") ?: false,
+            call.argument<Boolean>("pingPong") ?: false,
+            call.argument<Boolean>("bypass") ?: false,
+            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0)
+        )
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ddm.max/live_audio")
@@ -19,17 +36,36 @@ class MainActivity : FlutterActivity() {
                             call.argument<Double>("level") ?: 0.8,
                             call.argument<Boolean>("noiseReduction") ?: true,
                             call.argument<Boolean>("noiseGate") ?: true,
-                            call.argument<Double>("ancLevel") ?: 0.65
+                            call.argument<Double>("ancLevel") ?: 0.65,
+                            call.argument<Boolean>("dual") ?: false,
+                            call.argument<Boolean>("pingPong") ?: false,
+                            call.argument<Boolean>("bypass") ?: false,
+                            call.argument<List<Double>>("eq") ?: listOf(0.0, 0.0, 0.0, 0.0, 0.0)
                         )
                         result.success(mapOf(
                             "noiseSuppressor" to liveAudioEngine.noiseSuppressorActive,
                             "echoCanceler" to liveAudioEngine.echoCancelerActive
                         ))
-                    } catch (e: Exception) { result.error("LIVE_AUDIO_START", e.message, null) }
-                    "stop" -> { liveAudioEngine.stop(); result.success(true) }
+                    } catch (e: Exception) {
+                        result.error("LIVE_AUDIO_START", e.message, null)
+                    }
+                    "update" -> try {
+                        applyAudioSettings(call)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("LIVE_AUDIO_UPDATE", e.message, null)
+                    }
+                    "stop" -> {
+                        liveAudioEngine.stop()
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }
     }
-    override fun onDestroy() { liveAudioEngine.stop(); super.onDestroy() }
+
+    override fun onDestroy() {
+        liveAudioEngine.stop()
+        super.onDestroy()
+    }
 }

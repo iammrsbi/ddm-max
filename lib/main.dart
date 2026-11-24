@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
@@ -31,6 +32,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
   double level=80,feedback=38,delayTime=320,mix=45;
   final List<double> eq=[0,0,0,0,0];
+  String eqPreset='FLAT';
   bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false,liveMonitoring=false;
   bool noiseReduction=true,noiseGate=true;
   static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
@@ -103,7 +105,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       }
       final permission=await Permission.microphone.request();
       if(!permission.isGranted){note('Microphone permission allow karo.');return;}
-      final caps=await liveChannel.invokeMapMethod<String,dynamic>('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100});
+      final caps=await liveChannel.invokeMapMethod<String,dynamic>('start', {'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100,'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq});
       if(mounted)setState(()=>liveMonitoring=true);
       final ns=caps?['noiseSuppressor']==true;
       final aec=caps?['echoCanceler']==true;
@@ -130,6 +132,24 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Future<void> shareFile(File? f) async {
     if(f==null){note('Pehle file banao.');return;}
     await Share.shareXFiles([XFile(f.path)],text:'DDM-MAX Audio');
+  }
+  Map<String,dynamic> _liveConfig()=>({
+    'delayMs':delayTime.round(),'feedback':feedback/100,'mix':mix/100,'level':level/100,
+    'noiseReduction':noiseReduction,'noiseGate':noiseGate,'ancLevel':ancLevel/100,
+    'dual':dual,'pingPong':pingPong,'bypass':bypass,'eq':eq,
+  });
+  Future<void> _updateLiveEngine() async {
+    if(!liveMonitoring)return;
+    try{await liveChannel.invokeMethod('update',_liveConfig());}
+    catch(e){note('Live control update error: $e');}
+  }
+  void _changeLive(VoidCallback change){setState(change);_updateLiveEngine();}
+  Future<void> _openHadaiqBook({required bool pdf}) async {
+    final uri=Uri.parse(pdf
+      ?'https://data2.dawateislami.net/Data/Books/Download/hi/pdf/2015/290-1.pdf?fn=hadaiq-e-bakhshish'
+      :'https://www.dawateislami.net/bookslibrary/hi/hadaiq-e-bakhshish');
+    try{final ok=await launchUrl(uri,mode:LaunchMode.externalApplication);if(!ok)note('Book link open nahi hua. Internet check karo.');}
+    catch(e){note('Book open error: $e');}
   }
   @override Widget build(BuildContext context){
     final pages=[delayPage(),filePage(),eqPage(),recordPage(),libraryPage(),settingsPage()];
@@ -173,29 +193,29 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     ])),
     box(Column(children:[
       Row(children:[
-        Expanded(child:ledMetric('DELAY TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>setState(()=>delayTime=v))),
+        Expanded(child:ledMetric('DELAY TIME','${delayTime.round()}','ms',delayTime,40,1200,(v)=>_changeLive(()=>delayTime=v))),
         const SizedBox(width:7),
-        Expanded(child:ledMetric('FEEDBACK','${feedback.round()}','%',feedback,0,92,(v)=>setState(()=>feedback=v))),
+        Expanded(child:ledMetric('FEEDBACK','${feedback.round()}','%',feedback,0,92,(v)=>_changeLive(()=>feedback=v))),
       ]),
       const SizedBox(height:8),
       Row(children:[
-        Expanded(child:ledMetric('LEVEL','${level.round()}','%',level,0,100,(v)=>setState(()=>level=v))),
+        Expanded(child:ledMetric('LEVEL','${level.round()}','%',level,0,100,(v)=>_changeLive(()=>level=v))),
         const SizedBox(width:7),
-        Expanded(child:ledMetric('MIX','${mix.round()}','%',mix,0,100,(v)=>setState(()=>mix=v))),
+        Expanded(child:ledMetric('MIX','${mix.round()}','%',mix,0,100,(v)=>_changeLive(()=>mix=v))),
       ]),
     ])),
     noiseControlCard(),
     box(Column(children:[
       Row(children:[
-        Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>setState(()=>dual=false))),
+        Expanded(child:neonMode('SINGLE DELAY',!dual,green,()=>_changeLive(()=>dual=false))),
         const SizedBox(width:7),
-        Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>setState(()=>dual=true))),
+        Expanded(child:neonMode('DUAL DELAY',dual,Colors.lightBlueAccent,()=>_changeLive(()=>dual=true))),
       ]),
       const SizedBox(height:8),
       Row(children:[
-        Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),
+        Expanded(child:neonMode('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
         const SizedBox(width:7),
-        Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass))),
+        Expanded(child:neonMode('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass))),
       ]),
     ])),
     box(Column(children:[
@@ -255,10 +275,10 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Row(children:[Expanded(child:outlined(Icons.play_arrow,'PLAY ORIGINAL',()=>play(selected))),const SizedBox(width:8),Expanded(child:outlined(Icons.stop,'STOP',stop))]),
     ])),
     box(Column(children:[
-      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>setState(()=>delayTime=v)),
-      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>setState(()=>feedback=v)),
-      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>setState(()=>mix=v)),
-      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>setState(()=>level=v)),
+      slider('DELAY TIME',delayTime,40,1200,'${delayTime.round()} ms',(v)=>_changeLive(()=>delayTime=v)),
+      slider('FEEDBACK',feedback,0,92,'${feedback.round()}%',(v)=>_changeLive(()=>feedback=v)),
+      slider('EFFECT MIX',mix,0,100,'${mix.round()}%',(v)=>_changeLive(()=>mix=v)),
+      slider('OUTPUT LEVEL',level,0,100,'${level.round()}%',(v)=>_changeLive(()=>level=v)),
       FilledButton.icon(onPressed:working?null:()=>process(selected),icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.auto_awesome),label:Text(working?'PROCESSING...':'PROCESS & SAVE ECHO')),
       const SizedBox(height:7),outlined(Icons.play_circle,'PLAY PROCESSED',()=>play(processed)),
       outlined(Icons.share,'SHARE / EXPORT WAV',()=>shareFile(processed)),
@@ -269,13 +289,13 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget eqPage()=>scroll([
     title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
     box(Column(children:[
-      Row(children:[Expanded(child:mode('FLAT',eq.every((v)=>v==0),()=>setState(()=>eq.fillRange(0,5,0)))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',false,()=>setState((){eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;})))]),
-      slider('BASS • 100 Hz',eq[0],-12,12,'${eq[0].round()} dB',(v)=>setState(()=>eq[0]=v)),
-      slider('LOW MID • 350 Hz',eq[1],-12,12,'${eq[1].round()} dB',(v)=>setState(()=>eq[1]=v)),
-      slider('MID • 1 kHz',eq[2],-12,12,'${eq[2].round()} dB',(v)=>setState(()=>eq[2]=v)),
-      slider('HIGH MID • 3.5 kHz',eq[3],-12,12,'${eq[3].round()} dB',(v)=>setState(()=>eq[3]=v)),
-      slider('TREBLE • 9 kHz',eq[4],-12,12,'${eq[4].round()} dB',(v)=>setState(()=>eq[4]=v)),
-      Row(children:[Expanded(child:mode('BASS BOOST',false,()=>setState((){eq[0]=8;eq[1]=3;}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',false,()=>setState((){eq[2]=3;eq[3]=6;eq[4]=3;})))]),
+      Row(children:[Expanded(child:mode('FLAT',eqPreset=='FLAT',()=>_changeLive((){eq.fillRange(0,5,0);eqPreset='FLAT';}))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',eqPreset=='NAAT VOICE',()=>_changeLive((){eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;eqPreset='NAAT VOICE';})))]),
+      slider('BASS • 100 Hz',eq[0],-12,12,'${eq[0].round()} dB',(v)=>_changeLive(() {eq[0]=v;eqPreset='CUSTOM';})),
+      slider('LOW MID • 350 Hz',eq[1],-12,12,'${eq[1].round()} dB',(v)=>_changeLive(() {eq[1]=v;eqPreset='CUSTOM';})),
+      slider('MID • 1 kHz',eq[2],-12,12,'${eq[2].round()} dB',(v)=>_changeLive(() {eq[2]=v;eqPreset='CUSTOM';})),
+      slider('HIGH MID • 3.5 kHz',eq[3],-12,12,'${eq[3].round()} dB',(v)=>_changeLive(() {eq[3]=v;eqPreset='CUSTOM';})),
+      slider('TREBLE • 9 kHz',eq[4],-12,12,'${eq[4].round()} dB',(v)=>_changeLive(() {eq[4]=v;eqPreset='CUSTOM';})),
+      Row(children:[Expanded(child:mode('BASS BOOST',eqPreset=='BASS BOOST',()=>_changeLive((){eq[0]=8;eq[1]=3;eqPreset='BASS BOOST';}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',eqPreset=='CLEAR VOCAL',()=>_changeLive((){eq[2]=3;eq[3]=6;eq[4]=3;eqPreset='CLEAR VOCAL';})))]),
       const SizedBox(height:8),const Text('EQ values are used by PROCESS & SAVE ECHO on the File Echo or Record tab.',style:TextStyle(color:Colors.white60,fontSize:10)),
     ])),
     FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('GO TO FILE ECHO')),
@@ -307,13 +327,27 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget noiseControlCard()=>box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     const Row(children:[Icon(Icons.graphic_eq,color:green,size:25),SizedBox(width:8),Text('ANC • MIC NOISE CONTROL',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.7))]),
     const SizedBox(height:5),
-    sw('ANC / NOISE REDUCTION',noiseReduction,(v)=>setState(()=>noiseReduction=v)),
-    slider('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}%',(v)=>setState(()=>ancLevel=v)),
-    sw('NOISE GATE',noiseGate,(v)=>setState(()=>noiseGate=v)),
+    sw('ANC / NOISE REDUCTION',noiseReduction,(v)=>_changeLive(()=>noiseReduction=v)),
+    slider('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}%',(v)=>_changeLive(()=>ancLevel=v)),
+    sw('NOISE GATE',noiseGate,(v)=>_changeLive(()=>noiseGate=v)),
     const Text('Software mic noise reduction • 0–100%',style:TextStyle(color:Colors.white60,fontSize:10)),
   ]));
   Widget libraryPage()=>scroll([
-    title('NAAT COLLECTION','Add audio tracks from your phone and play them here.'),
+    title('NAAT COLLECTION','Hadaiq-e-Bakhshish Hindi book aur apni Naat audio files.'),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Row(children:[Icon(Icons.menu_book,color:gold,size:34),SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text('हदाइक़े बख़्शिश',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900,color:gold)),
+        Text('Imam Ahmad Raza Khan • Hindi • 498 pages',style:TextStyle(fontSize:10,color:Colors.white70)),
+      ]))]),
+      const SizedBox(height:10),
+      Row(children:[
+        Expanded(child:FilledButton.icon(onPressed:()=>_openHadaiqBook(pdf:false),icon:const Icon(Icons.menu_book),label:const Text('READ ONLINE'))),
+        const SizedBox(width:8),
+        Expanded(child:OutlinedButton.icon(onPressed:()=>_openHadaiqBook(pdf:true),icon:const Icon(Icons.picture_as_pdf),label:const Text('OPEN / DOWNLOAD PDF'))),
+      ]),
+      const Text('Official Dawat-e-Islami Hindi edition. Internet connection required.',style:TextStyle(fontSize:10,color:Colors.white54)),
+    ])),
+    title('MY NAAT AUDIO','Add and play your own Naat recordings.'),
     box(Column(children:[
       const Icon(Icons.library_music,size:48,color:gold),const Text('MY NAAT COLLECTION',style:TextStyle(fontWeight:FontWeight.bold)),
       const SizedBox(height:8),action(Icons.add,'ADD NAAT AUDIO',()=>chooseAudio(forLibrary:true)),
@@ -323,6 +357,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Icon(Icons.music_note,color:gold),const SizedBox(width:8),Expanded(child:Text(f.path.split('/').last,maxLines:2,overflow:TextOverflow.ellipsis)),
       IconButton(onPressed:()=>play(f),icon:const Icon(Icons.play_arrow,color:green)),
       IconButton(onPressed:()=>shareFile(f),icon:const Icon(Icons.share)),
+      IconButton(onPressed:()async{setState(()=>library.remove(f));final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());},icon:const Icon(Icons.delete_outline,color:Colors.redAccent)),
     ]))),
   ]);
   Widget settingsPage()=>scroll([
