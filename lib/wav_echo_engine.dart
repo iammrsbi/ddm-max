@@ -42,14 +42,18 @@ class WavEchoEngine {
         dataStart == null || dataLength == null || (channels != 1 && channels != 2)) {
       throw const FormatException('Sirf PCM 16-bit mono/stereo WAV supported hai.');
     }
-    final frames = dataLength ~/ (channels * 2);
-    final delayFrames = math.max(1, (sampleRate * delayMs / 1000).round());
+    final ch = channels!;
+    final rate = sampleRate!;
+    final startData = dataStart!;
+    final lengthData = dataLength!;
+    final frames = lengthData ~/ (ch * 2);
+    final delayFrames = math.max(1, (rate * delayMs / 1000).round()).toInt();
     final tailFrames = bypass ? 0 : delayFrames * (dual ? 5 : 4);
     final totalFrames = frames + tailFrames;
     final dry = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
     for (var f = 0; f < frames; f++) {
       for (var c = 0; c < ch; c++) {
-        dry[c][f] = data.getInt16(dataStart + (f * channels + c) * 2, Endian.little) / 32768.0;
+        dry[c][f] = data.getInt16(startData + (f * ch + c) * 2, Endian.little) / 32768.0;
       }
     }
     final filtered = List<Float64List>.generate(ch, (c) {
@@ -61,7 +65,7 @@ class WavEchoEngine {
       var signal = dry[c];
       for (var band = 0; band < 5; band++) {
         final gain = math.pow(10, gains[band] / 40).toDouble();
-        final w = 2 * math.pi * centers[band] / sampleRate;
+        final w = 2 * math.pi * centers[band] / rate;
         final alpha = math.sin(w) / (2 * 1.0);
         final cosw = math.cos(w);
         final a0 = 1 + alpha / gain;
@@ -92,22 +96,22 @@ class WavEchoEngine {
       final idxR = f % lineR.length;
       final delayedL = lineL[idxL];
       final delayedR = lineR[idxR];
-      for (var c=0;c<channels;c++) {
+      for (var c=0;c<ch;c++) {
         final drySample = f < frames ? filtered[c][f] : 0.0;
-        final delayed = channels == 1 ? delayedL : (pingPong ? (c == 0 ? delayedR : delayedL) : (c == 0 ? delayedL : delayedR));
+        final delayed = ch == 1 ? delayedL : (pingPong ? (c == 0 ? delayedR : delayedL) : (c == 0 ? delayedL : delayedR));
         final echo = bypass ? 0.0 : delayed;
         output[c][f] = (((drySample * (1-wet)) + ((drySample + echo) * wet)) * gain).toDouble();
       }
       if (!bypass) {
         final inL = f < frames ? filtered[0][f] : 0.0;
-        final inR = channels == 2 && f < frames ? filtered[1][f] : inL;
+        final inR = ch == 2 && f < frames ? filtered[1][f] : inL;
         lineL[idxL] = (inL + (pingPong && ch == 2 ? delayedR : delayedL) * fb).clamp(-1.0,1.0).toDouble();
         lineR[idxR] = (inR + (pingPong && ch == 2 ? delayedL : delayedR) * fb).clamp(-1.0,1.0).toDouble();
       }
     }
     final pcm = BytesBuilder();
     for (var f=0;f<totalFrames;f++) {
-      for (var c=0;c<channels;c++) {
+      for (var c=0;c<ch;c++) {
         final sample = (output[c][f].clamp(-1.0,0.999969) * 32768).round();
         final b = ByteData(2)..setInt16(0,sample,Endian.little);
         pcm.add(b.buffer.asUint8List());
@@ -118,8 +122,8 @@ class WavEchoEngine {
     void txt(String s)=>result.add(s.codeUnits);
     void u16(int n){final b=ByteData(2)..setUint16(0,n,Endian.little);result.add(b.buffer.asUint8List());}
     void u32(int n){final b=ByteData(4)..setUint32(0,n,Endian.little);result.add(b.buffer.asUint8List());}
-    txt('RIFF');u32(36+payload.length);txt('WAVE');txt('fmt ');u32(16);u16(1);u16(channels);
-    u32(sampleRate);u32(sampleRate*channels*2);u16(channels*2);u16(16);txt('data');u32(payload.length);result.add(payload);
+    txt('RIFF');u32(36+payload.length);txt('WAVE');txt('fmt ');u32(16);u16(1);u16(ch);
+    u32(rate);u32(rate*ch*2);u16(ch*2);u16(16);txt('data');u32(payload.length);result.add(payload);
     await outputDirectory.create(recursive:true);
     final safe = input.uri.pathSegments.last.replaceAll(RegExp(r'[^A-Za-z0-9._-]'),'_');
     final file=File('${outputDirectory.path}/${DateTime.now().millisecondsSinceEpoch}_DDM_$safe');
