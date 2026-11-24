@@ -33,6 +33,7 @@ class LiveAudioEngine {
     @Volatile private var dualValue = false
     @Volatile private var pingPongValue = false
     @Volatile private var bypassValue = false
+    @Volatile private var modeValue = 0
     @Volatile private var eqGains = FloatArray(5)
 
     @Volatile var noiseSuppressorActive: Boolean = false
@@ -43,7 +44,7 @@ class LiveAudioEngine {
     @Synchronized fun update(
         delayMs: Int, feedback: Double, mix: Double, level: Double,
         noiseReduction: Boolean, noiseGate: Boolean, ancLevel: Double,
-        dual: Boolean, pingPong: Boolean, bypass: Boolean, eq: List<Double>
+        dual: Boolean, pingPong: Boolean, bypass: Boolean, eq: List<Double>, mode: Int
     ) {
         delaySamples = (44100L * delayMs.coerceIn(40, 1200) / 1000L).toInt().coerceAtLeast(1)
         feedbackValue = feedback.coerceIn(0.0, 0.92).toFloat()
@@ -55,16 +56,17 @@ class LiveAudioEngine {
         dualValue = dual
         pingPongValue = pingPong
         bypassValue = bypass
+        modeValue = mode.coerceIn(0, 5)
         eqGains = FloatArray(5) { i -> (eq.getOrNull(i) ?: 0.0).coerceIn(-12.0, 12.0).toFloat() }
     }
 
     @Synchronized fun start(
         delayMs: Int, feedback: Double, mix: Double, level: Double,
         noiseReduction: Boolean, noiseGate: Boolean, ancLevel: Double,
-        dual: Boolean, pingPong: Boolean, bypass: Boolean, eq: List<Double>
+        dual: Boolean, pingPong: Boolean, bypass: Boolean, eq: List<Double>, mode: Int
     ) {
         stop()
-        update(delayMs, feedback, mix, level, noiseReduction, noiseGate, ancLevel, dual, pingPong, bypass, eq)
+        update(delayMs, feedback, mix, level, noiseReduction, noiseGate, ancLevel, dual, pingPong, bypass, eq, mode)
         val rate = 44100
         val minIn = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
@@ -108,6 +110,7 @@ class LiveAudioEngine {
         val cutoffs = floatArrayOf(100f, 350f, 1000f, 3500f, 9000f)
         val alphas = FloatArray(5) { i -> (1.0 - exp((-2.0 * PI * cutoffs[i] / rate))).toFloat() }
         var gateGain = 1.0f
+        var echoTone = 0.0f
 
         running = true
         input.startRecording()
@@ -162,8 +165,18 @@ class LiveAudioEngine {
                     val secondIndex = (cursor - delay * 2 + ring.size * 2) % ring.size
                     val firstEcho = if (bypassValue) 0.0f else ring[firstIndex]
                     val secondEcho = if (!bypassValue && dualValue) ring[secondIndex] * 0.55f else 0.0f
-                    val echo = firstEcho + secondEcho
-                    ring[cursor] = (dry + echo * feedbackValue).coerceIn(-1.0f, 1.0f)
+                    var echo = firstEcho + secondEcho
+                    when (modeValue) {
+                        1 -> { echoTone += 0.20f * (echo - echoTone); echo = echoTone }
+                        2 -> { echoTone += 0.12f * (echo - echoTone); echo = (kotlin.math.tanh(echoTone * 1.25f)).toFloat() }
+                        3 -> { echoTone += 0.075f * (echo - echoTone); echo = echoTone }
+                        4 -> {
+                            echoTone += 0.24f * (echo - echoTone)
+                            val wobble = 0.88f + 0.12f * kotlin.math.sin(2.0 * PI * cursor / (rate * 2.8)).toFloat()
+                            echo = echoTone * wobble
+                        }
+                    }
+                    ring[cursor] = (dry + (firstEcho + secondEcho) * feedbackValue).coerceIn(-1.0f, 1.0f)
 
                     val wet = if (bypassValue) 0.0f else mixValue
                     val gain = levelValue
