@@ -87,7 +87,9 @@ class WavEchoEngine {
       var signal = cleaned[c];
       for (var band = 0; band < 5; band++) {
         final gain = math.pow(10, gains[band] / 40).toDouble();
-        final w = 2 * math.pi * centers[band] / rate;
+        // Keep every EQ band below Nyquist for low-rate WAV recordings.
+        final centerHz = math.min(centers[band], rate * 0.45);
+        final w = 2 * math.pi * centerHz / rate;
         final alpha = math.sin(w) / (2 * 1.0);
         final cosw = math.cos(w);
         final a0 = 1 + alpha / gain;
