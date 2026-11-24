@@ -162,13 +162,13 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget eqPage()=>scroll([
     title('5-BAND EQUALIZER','EQ is applied to the next processed audio output.'),
     box(Column(children:[
-      Row(children:[Expanded(child:mode('FLAT',eq.every((v)=>v==0),()=>setState(()=>eq.fillRange(0,5,0)))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',false,()=>setState(()=>{eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;})))]),
+      Row(children:[Expanded(child:mode('FLAT',eq.every((v)=>v==0),()=>setState(()=>eq.fillRange(0,5,0)))),const SizedBox(width:7),Expanded(child:mode('NAAT VOICE',false,()=>setState((){eq[0]=1;eq[1]=1;eq[2]=3;eq[3]=4;eq[4]=2;})))]),
       slider('BASS • 100 Hz',eq[0],-12,12,'${eq[0].round()} dB',(v)=>setState(()=>eq[0]=v)),
       slider('LOW MID • 350 Hz',eq[1],-12,12,'${eq[1].round()} dB',(v)=>setState(()=>eq[1]=v)),
       slider('MID • 1 kHz',eq[2],-12,12,'${eq[2].round()} dB',(v)=>setState(()=>eq[2]=v)),
       slider('HIGH MID • 3.5 kHz',eq[3],-12,12,'${eq[3].round()} dB',(v)=>setState(()=>eq[3]=v)),
       slider('TREBLE • 9 kHz',eq[4],-12,12,'${eq[4].round()} dB',(v)=>setState(()=>eq[4]=v)),
-      Row(children:[Expanded(child:mode('BASS BOOST',false,()=>setState(()=>{eq[0]=8;eq[1]=3;}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',false,()=>setState(()=>{eq[2]=3;eq[3]=6;eq[4]=3;})))]),
+      Row(children:[Expanded(child:mode('BASS BOOST',false,()=>setState((){eq[0]=8;eq[1]=3;}))),const SizedBox(width:8),Expanded(child:mode('CLEAR VOCAL',false,()=>setState((){eq[2]=3;eq[3]=6;eq[4]=3;})))]),
       const SizedBox(height:8),const Text('EQ values are used by PROCESS & SAVE ECHO on the File Echo or Record tab.',style:TextStyle(color:Colors.white60,fontSize:10)),
     ])),
     FilledButton.icon(onPressed:()=>setState(()=>tab=1),icon:const Icon(Icons.audio_file),label:const Text('GO TO FILE ECHO')),
@@ -216,7 +216,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget slider(String name,double value,double min,double max,String read,ValueChanged<double> onChanged)=>Padding(
     padding:const EdgeInsets.only(bottom:7),child:Column(children:[
       Row(children:[Expanded(child:Text(name,style:const TextStyle(fontSize:11,fontWeight:FontWeight.bold,letterSpacing:.7))),Text(read,style:const TextStyle(color:gold,fontWeight:FontWeight.bold,fontSize:12))]),
-      Slider(value:value.clamp(min,max),min:min,max:max,onChanged:onChanged),
+      Slider(value:value.clamp(min,max).toDouble(),min:min,max:max,onChanged:onChanged),
     ]));
   Widget sw(String label,bool value,ValueChanged<bool> fn)=>Row(children:[Expanded(child:Text(label,style:const TextStyle(fontSize:11,fontWeight:FontWeight.bold))),Switch(value:value,activeColor:green,onChanged:fn)]);
   Widget mode(String label,bool active,VoidCallback fn)=>OutlinedButton(

@@ -46,13 +46,13 @@ class WavEchoEngine {
     final delayFrames = math.max(1, (sampleRate * delayMs / 1000).round());
     final tailFrames = bypass ? 0 : delayFrames * (dual ? 5 : 4);
     final totalFrames = frames + tailFrames;
-    final dry = List<Float64List>.generate(channels, (_) => Float64List(totalFrames));
+    final dry = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
     for (var f = 0; f < frames; f++) {
-      for (var c = 0; c < channels; c++) {
+      for (var c = 0; c < ch; c++) {
         dry[c][f] = data.getInt16(dataStart + (f * channels + c) * 2, Endian.little) / 32768.0;
       }
     }
-    final filtered = List<Float64List>.generate(channels, (c) {
+    final filtered = List<Float64List>.generate(ch, (c) {
       final out = Float64List(totalFrames);
       if (bypass) { for (var i=0;i<frames;i++) { out[i]=dry[c][i]; } return out; }
       final centers = [100.0, 350.0, 1000.0, 3500.0, 9000.0];
@@ -81,10 +81,10 @@ class WavEchoEngine {
       }
       return signal;
     });
-    final output = List<Float64List>.generate(channels, (_) => Float64List(totalFrames));
-    final fb = feedback.clamp(0.0, 0.92);
-    final wet = mix.clamp(0.0, 1.0);
-    final gain = level.clamp(0.0, 1.5);
+    final output = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
+    final fb = feedback.clamp(0.0, 0.92).toDouble();
+    final wet = mix.clamp(0.0, 1.0).toDouble();
+    final gain = level.clamp(0.0, 1.5).toDouble();
     final lineL = Float64List(delayFrames + 1);
     final lineR = Float64List((dual ? delayFrames * 3 : delayFrames) + 1);
     for (var f=0; f<totalFrames; f++) {
@@ -96,13 +96,13 @@ class WavEchoEngine {
         final drySample = f < frames ? filtered[c][f] : 0.0;
         final delayed = channels == 1 ? delayedL : (pingPong ? (c == 0 ? delayedR : delayedL) : (c == 0 ? delayedL : delayedR));
         final echo = bypass ? 0.0 : delayed;
-        output[c][f] = ((drySample * (1-wet)) + ((drySample + echo) * wet)) * gain;
+        output[c][f] = (((drySample * (1-wet)) + ((drySample + echo) * wet)) * gain).toDouble();
       }
       if (!bypass) {
         final inL = f < frames ? filtered[0][f] : 0.0;
         final inR = channels == 2 && f < frames ? filtered[1][f] : inL;
-        lineL[idxL] = (inL + (pingPong && channels == 2 ? delayedR : delayedL) * fb).clamp(-1.0,1.0);
-        lineR[idxR] = (inR + (pingPong && channels == 2 ? delayedL : delayedR) * fb).clamp(-1.0,1.0);
+        lineL[idxL] = (inL + (pingPong && ch == 2 ? delayedR : delayedL) * fb).clamp(-1.0,1.0).toDouble();
+        lineR[idxR] = (inR + (pingPong && ch == 2 ? delayedL : delayedR) * fb).clamp(-1.0,1.0).toDouble();
       }
     }
     final pcm = BytesBuilder();
