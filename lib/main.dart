@@ -30,7 +30,7 @@ class ConsoleHome extends StatefulWidget {
 class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
   int delayMode=0;
-  static const List<String> delayModeNames=['STANDARD','ANALOG','TAPE','WARM','MOD','DUAL'];
+  static const List<String> delayModeNames=['S','M','L','SHORT LOOP'];
   Duration fileDuration=Duration.zero, filePosition=Duration.zero;
   final List<DateTime> _tapTimes=[];
   int tapBpm=120;
@@ -105,7 +105,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       } catch (_) {
         note('File import ho gayi. Preview codec support nahi mila; APPLY EFFECT try karo.');
       }
-      note('File import ho gayi. Original preview chalao, phir controls set karke APPLY & LISTEN dabao.');
+      note('File upload ho gayi — original preview ab play ho raha hai.');
+      await play(file);
     } catch (e) {
       note('File upload error: $e');
     }
@@ -135,7 +136,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     } catch (e) { note('Playback control error: $e'); }
   }
   String _time(Duration d){final m=d.inMinutes.remainder(60).toString().padLeft(2,'0');final sec=d.inSeconds.remainder(60).toString().padLeft(2,'0');final h=d.inHours;return h>0?'$h:$m:$sec':'$m:$sec';}
-  Future<void> auditionEffect() async { await process(selected); final output=processed; if(output!=null) await play(output); }
+  Future<void> auditionEffect() async { await process(selected); }
 
   void tapTempo() {
     final now=DateTime.now();
@@ -204,7 +205,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       );
       if (!mounted) return;
       setState(() => processed = output);
-      note('Effect apply ho gaya. WAV file ready hai — ab Play Processed dabao.');
+      await play(output);
+      note('Effect apply ho gaya — processed WAV ab play ho rahi hai.');
     } catch (e) {
       if (mounted) note('Effect apply nahi hua: $e');
     } finally {
@@ -375,7 +377,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget roundModeDial(){
     final name=delayModeNames[delayMode];
     return Center(child:GestureDetector(
-      onTap:()=>_changeLive(() { delayMode=(delayMode+1)%delayModeNames.length; dual=delayMode==5; processed=null; }),
+      onTap:()=>_changeLive(() {
+        delayMode=(delayMode+1)%delayModeNames.length;
+        dual=false;
+        switch(delayMode) {
+          case 0: delayTime=120; feedback=28; break;
+          case 1: delayTime=320; feedback=38; break;
+          case 2: delayTime=650; feedback=48; break;
+          case 3: delayTime=85; feedback=72; break;
+        }
+        processed=null;
+      }),
       child:Container(width:132,height:132,decoration:BoxDecoration(
         shape:BoxShape.circle,gradient:const RadialGradient(colors:[Color(0xFF243B34),Color(0xFF050B08)]),
         border:Border.all(color:Colors.lightBlueAccent,width:2),
@@ -448,7 +460,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
     ])),
     box(Column(children:[
-      const Text('FIVE MAIN ROTARY KNOBS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const Text('FIVE MAIN DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:14),
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
         numberControl('E.LEVEL',mix,0,100,'%',1,(v)=>setState(() { mix=v; processed=null; })),
@@ -488,7 +500,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     }
     return box(Column(children:[
       const Row(children:[Icon(Icons.graphic_eq,color:green,size:24),SizedBox(width:8),
-        Text('ANC • MIC NOISE REDUCTION',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.6))]),
+        Text(live?'ANC • LIVE MIC NOISE REDUCTION':'ANC • FILE NOISE REDUCTION',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.6))]),
       const SizedBox(height:10),
       Row(children:[
         Expanded(child:roundToggle('ANC',noiseReduction,green,()=>update(()=>noiseReduction=!noiseReduction))),
@@ -497,7 +509,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       ]),
       const SizedBox(height:7),
       const SizedBox(height:6),
-      const Text('ANC Level noise reduction strength ko adjust karta hai. Hardware support device ke hisaab se badal sakta hai. Ping-Pong stereo echo ko Left aur Right mein move karta hai.',
+      Text(live?'ANC Level live mic noise filtering ko adjust karta hai; device hardware support alag ho sakta hai.':'File ANC ek software high-pass filter + noise gate hai, hardware ANC nahi. Isse low rumble/noise kam hota hai; voice/music ke kuch low frequencies bhi kam ho sakti hain. Ping-Pong stereo echo ko Left aur Right mein move karta hai.',
         style:TextStyle(color:Colors.white60,fontSize:9)),
     ]));
   }
