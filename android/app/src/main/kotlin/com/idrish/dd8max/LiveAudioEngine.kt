@@ -56,7 +56,7 @@ class LiveAudioEngine {
         dualValue = dual
         pingPongValue = pingPong
         bypassValue = bypass
-        modeValue = mode.coerceIn(0, 5)
+        modeValue = mode.coerceIn(0, 3)
         eqGains = FloatArray(5) { i -> (eq.getOrNull(i) ?: 0.0).coerceIn(-12.0, 12.0).toFloat() }
         try { noiseSuppressor?.enabled = noiseReduction } catch (_: Exception) {}
     }
