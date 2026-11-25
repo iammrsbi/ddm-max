@@ -8,12 +8,10 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
-const green = Color(0xFF20C878), gold = Color(0xFFFFC857), panel = Color(0xA5101B18);
+const green = Color(0xFF00BFFF), gold = Color(0xFFFFC857), panel = Color(0xB0081424);
 
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
@@ -44,16 +42,10 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
   File? selected,processed,recorded,currentPlayback;
-  List<File> library=[];
   double playbackVolume=1.0,ancLevel=65;
   String? recordingPath;
 
-  @override void initState(){super.initState();_loadLibrary(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st==PlayerState.paused);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
-  Future<void> _loadLibrary() async {
-    final prefs=await SharedPreferences.getInstance();
-    final paths=prefs.getStringList('ddm_naat_library')??[];
-    if(mounted)setState(()=>library=paths.where((p)=>File(p).existsSync()).map((p)=>File(p)).toList());
-  }
+  @override void initState(){super.initState(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st==PlayerState.paused);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
   @override void dispose(){liveChannel.invokeMethod('stop');player.dispose();recorder.dispose();super.dispose();}
 
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
@@ -89,21 +81,13 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     return destination;
   }
 
-  Future<void> chooseAudio({bool forLibrary=false}) async {
+  Future<void> chooseAudio() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.audio, allowMultiple: false, withReadStream: true, withData: false,
       );
       if (result == null || result.files.isEmpty) return;
       final file = await _copyPickedAudio(result.files.single);
-
-      if (forLibrary) {
-        if (!library.any((item) => item.path == file.path)) setState(() => library.add(file));
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setStringList('ddm_naat_library', library.map((item) => item.path).toList());
-        note('Audio collection mein add ho gayi.');
-        return;
-      }
 
       await player.stop();
       setState(() {
@@ -117,7 +101,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       } catch (_) {
         note('File import ho gayi. Preview codec support nahi mila; APPLY EFFECT try karo.');
       }
-      note('File app mein copy ho gayi. Ab APPLY EFFECT dabao.');
+      note('File import ho gayi. Original preview chalao, phir controls set karke APPLY & LISTEN dabao.');
     } catch (e) {
       note('File upload error: $e');
     }
@@ -147,7 +131,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     } catch (e) { note('Playback control error: $e'); }
   }
   String _time(Duration d){final m=d.inMinutes.remainder(60).toString().padLeft(2,'0');final sec=d.inSeconds.remainder(60).toString().padLeft(2,'0');final h=d.inHours;return h>0?'$h:$m:$sec':'$m:$sec';}
-  Future<void> auditionEffect() async {await process(selected);if(processed!=null)await play(processed);}
+  Future<void> auditionEffect() async { await process(selected); final output=processed; if(output!=null) await play(output); }
 
   Future<void> stop() async { await player.stop(); if(mounted)setState(()=>filePosition=Duration.zero); }
   Future<File> _decodeUploadedAudio(File source) async {
@@ -256,13 +240,6 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     catch(e){note('Live control update error: $e');}
   }
   void _changeLive(VoidCallback change){setState(change);_updateLiveEngine();}
-  Future<void> _openHadaiqBook({required bool pdf}) async {
-    final uri=Uri.parse(pdf
-      ?'https://data2.dawateislami.net/Data/Books/Download/hi/pdf/2015/290-1.pdf?fn=hadaiq-e-bakhshish'
-      :'https://www.dawateislami.net/bookslibrary/hi/hadaiq-e-bakhshish');
-    try{final ok=await launchUrl(uri,mode:LaunchMode.externalApplication);if(!ok)note('Book link open nahi hua. Internet check karo.');}
-    catch(e){note('Book open error: $e');}
-  }
   @override Widget build(BuildContext context){
     final pages=[delayPage(),filePage()];
     return Scaffold(
@@ -294,7 +271,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(23),border:Border.all(color:Colors.white.withOpacity(.16))),child:c);
   Widget delayPage()=>scroll([
-    title('DD-8 DIGITAL DELAY','LIVE MIC • Rounded LED controls • Headphones recommended'),
+    title('DDM MAX DIGITAL DELAY','LIVE MIC • Digital controls • Headphones recommended'),
     box(Column(children:[
       const Icon(Icons.mic,color:gold,size:38),
       Text(liveMonitoring?'LIVE MIC • EFFECT ON':'LIVE MIC • STANDBY',
@@ -310,10 +287,10 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       )),
     ])),
     box(Column(children:[
-      const Text('DD-8 • FOUR DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:12),
       Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-        Expanded(child:roundDial('ECHO',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v))),
+        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>_changeLive(()=>level=v))),
         const SizedBox(width:8),
         Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v))),
       ]),
@@ -321,19 +298,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
         Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>_changeLive(()=>delayTime=v))),
         const SizedBox(width:8),
-        Expanded(child:roundModeDial()),
+        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>_changeLive(()=>eq[0]=v))),
       ]),
     ])),
+    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>_changeLive(()=>eq[4]=v))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
     noiseControlCard(live:true),
     box(Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
       Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
       const SizedBox(width:10),
       Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass))),
     ])),
-    box(Column(children:[
-      const Text('5-BAND VOICE EQ',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),
-      for(int i=0;i<5;i++) slider(['BASS 100 Hz','LOW MID 350 Hz','MID 1 kHz','HIGH MID 3.5 kHz','TREBLE 9 kHz'][i],eq[i],-12,12,'${eq[i].round()} dB',(v)=>_changeLive(()=>eq[i]=v)),
-    ])),
+    box(const Text('BASS and TREBLE controls adjust the low and high EQ bands.',style:TextStyle(color:Colors.white60,fontSize:10))),
   ]);
 
   Widget roundDial(String label,double value,double min,double max,String number,String unit,ValueChanged<double> onChanged){
@@ -403,7 +378,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   );
 
   Widget filePage()=>scroll([
-    title('PICK FILE • DIGITAL DELAY','Upload audio • Apply effect • Listen • Export WAV'),
+    title('PICK FILE • DIGITAL DELAY','Choose audio • Preview • Adjust effects • Apply & listen'),
     box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       const Icon(Icons.audio_file,color:gold,size:38),
       Text(selected?.path.split('/').last??'NO FILE SELECTED',textAlign:TextAlign.center,maxLines:2,
@@ -431,20 +406,21 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
     ])),
     box(Column(children:[
-      const Text('DD-8 • FOUR DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:12),
       Row(children:[
-        Expanded(child:roundDial('ECHO',mix,0,100,'${mix.round()}','%',(v)=>setState(()=>mix=v))),
+        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>setState(()=>{level=v;processed=null;}))),
         const SizedBox(width:8),
         Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(()=>feedback=v))),
       ]),
       const SizedBox(height:12),
       Row(children:[
-        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(()=>delayTime=v))),
+        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(()=>{delayTime=v;processed=null;}))),
         const SizedBox(width:8),
-        Expanded(child:roundModeDial()),
+        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(()=>{eq[0]=v;processed=null;}))),
       ]),
     ])),
+    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(()=>{eq[4]=v;processed=null;}))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
     noiseControlCard(),
     box(Row(children:[
       Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),
@@ -455,7 +431,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       FilledButton.icon(
         onPressed:working||selected==null?null:auditionEffect,
         icon:working?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.graphic_eq),
-        label:Text(working?'CONVERTING / APPLYING EFFECT...':'APPLY EFFECT & LISTEN'),
+        label:Text(working?'PROCESSING AUDIO...':'APPLY EFFECT & LISTEN'),
         style:FilledButton.styleFrom(shape:const StadiumBorder(),padding:const EdgeInsets.symmetric(vertical:14))),
       const SizedBox(height:8),
       outlined(Icons.play_circle,'PLAY PROCESSED WAV',()=>play(processed)),
@@ -482,40 +458,11 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         Expanded(child:roundDial('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}','%',(v)=>update(()=>ancLevel=v))),
       ]),
       const SizedBox(height:7),
-      roundToggle('NOISE GATE',noiseGate,Colors.orangeAccent,()=>update(()=>noiseGate=!noiseGate)),
       const SizedBox(height:6),
-      const Text('Ping-Pong = stereo echo jo left aur right speaker mein baari-baari aata hai. Android NoiseSuppressor bhi available ho to ANC ke saath chalega.',
+      const Text('ANC Level noise reduction strength ko adjust karta hai. Hardware support device ke hisaab se badal sakta hai. Ping-Pong stereo echo ko Left aur Right mein move karta hai.',
         style:TextStyle(color:Colors.white60,fontSize:9)),
     ]));
   }
-  Widget libraryPage()=>scroll([
-    title('NAAT COLLECTION','Hadaiq-e-Bakhshish Hindi book aur apni Naat audio files.'),
-    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      const Row(children:[Icon(Icons.menu_book,color:gold,size:34),SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('हदाइक़े बख़्शिश',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900,color:gold)),
-        Text('Imam Ahmad Raza Khan • Hindi • 498 pages',style:TextStyle(fontSize:10,color:Colors.white70)),
-      ]))]),
-      const SizedBox(height:10),
-      Row(children:[
-        Expanded(child:FilledButton.icon(onPressed:()=>_openHadaiqBook(pdf:false),icon:const Icon(Icons.menu_book),label:const Text('READ ONLINE'))),
-        const SizedBox(width:8),
-        Expanded(child:OutlinedButton.icon(onPressed:()=>_openHadaiqBook(pdf:true),icon:const Icon(Icons.picture_as_pdf),label:const Text('OPEN / DOWNLOAD PDF'))),
-      ]),
-      const Text('Official Dawat-e-Islami Hindi edition. Internet connection required.',style:TextStyle(fontSize:10,color:Colors.white54)),
-    ])),
-    title('MY NAAT AUDIO','Add and play your own Naat recordings.'),
-    box(Column(children:[
-      const Icon(Icons.library_music,size:48,color:gold),const Text('MY NAAT COLLECTION',style:TextStyle(fontWeight:FontWeight.bold)),
-      const SizedBox(height:8),action(Icons.add,'ADD NAAT AUDIO',()=>chooseAudio(forLibrary:true)),
-    ])),
-    if(library.isEmpty)box(const Text('Abhi collection khaali hai. ADD NAAT AUDIO se apni files add karo.',textAlign:TextAlign.center,style:TextStyle(color:Colors.white60))),
-    ...library.map((f)=>box(Row(children:[
-      const Icon(Icons.music_note,color:gold),const SizedBox(width:8),Expanded(child:Text(f.path.split('/').last,maxLines:2,overflow:TextOverflow.ellipsis)),
-      IconButton(onPressed:()=>play(f),icon:const Icon(Icons.play_arrow,color:green)),
-      IconButton(onPressed:()=>shareFile(f),icon:const Icon(Icons.share)),
-      IconButton(onPressed:()async{setState(()=>library.remove(f));final prefs=await SharedPreferences.getInstance();await prefs.setStringList('ddm_naat_library',library.map((x)=>x.path).toList());},icon:const Icon(Icons.delete_outline,color:Colors.redAccent)),
-    ]))),
-  ]);
   Widget settingsPage()=>scroll([
     title('SETTINGS','Playback and app information'),
     box(const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
