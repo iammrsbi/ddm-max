@@ -84,7 +84,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Future<void> chooseAudio() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio, allowMultiple: false, withReadStream: true, withData: false,
+        type: FileType.audio, allowMultiple: false, withReadStream: true, withData: true,
       );
       if (result == null || result.files.isEmpty) return;
       final file = await _copyPickedAudio(result.files.single);
@@ -290,7 +290,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:12),
       Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>_changeLive(()=>level=v))),
+        Expanded(child:roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v))),
         const SizedBox(width:8),
         Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v))),
       ]),
@@ -304,7 +304,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>_changeLive(()=>eq[4]=v))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
     noiseControlCard(live:true),
     box(Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-      Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
+      Expanded(child:roundToggle('PING-PONG L ↔ R',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
       const SizedBox(width:10),
       Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>_changeLive(()=>bypass=!bypass))),
     ])),
@@ -341,7 +341,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget roundModeDial(){
     final name=delayModeNames[delayMode];
     return Center(child:GestureDetector(
-      onTap:()=>_changeLive(() { delayMode=(delayMode+1)%delayModeNames.length; dual=delayMode==5; }),
+      onTap:()=>_changeLive(() { delayMode=(delayMode+1)%delayModeNames.length; dual=delayMode==5; processed=null; }),
       child:Container(width:132,height:132,decoration:BoxDecoration(
         shape:BoxShape.circle,gradient:const RadialGradient(colors:[Color(0xFF243B34),Color(0xFF050B08)]),
         border:Border.all(color:Colors.lightBlueAccent,width:2),
@@ -409,7 +409,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:12),
       Row(children:[
-        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>setState(() { level=v; processed=null; }))),
+        Expanded(child:roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>setState(() { mix=v; processed=null; }))),
         const SizedBox(width:8),
         Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(() { feedback=v; processed=null; }))),
       ]),
