@@ -83,7 +83,11 @@ class WavEchoEngine {
     final startData = dataStart!;
     final lengthData = dataLength!;
     final frames = lengthData ~/ (ch * 2);
-    final delayFrames = math.max(1, (rate * delayMs / 1000).round()).toInt();
+    final safeMode = mode.clamp(0, 3);
+    final minDelayMs = safeMode == 0 ? 13 : (safeMode == 1 ? 50 : (safeMode == 2 ? 200 : 50));
+    final maxDelayMs = safeMode == 0 ? 50 : (safeMode == 1 ? 200 : (safeMode == 2 ? 800 : 200));
+    final safeDelayMs = delayMs.clamp(minDelayMs, maxDelayMs);
+    final delayFrames = math.max(1, (rate * safeDelayMs / 1000).round()).toInt();
     final tailFrames = bypass ? 0 : delayFrames * (mode == 3 ? 8 : (dual ? 5 : 4));
     final totalFrames = frames + tailFrames;
     final dry = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
