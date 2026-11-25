@@ -201,10 +201,20 @@ class WavEchoEngine {
         lineR[idxR] = (inR + (pingPong ? delayedL : delayedR) * fb).clamp(-1.0,1.0).toDouble();
       }
     }
+    // Auto-level quiet recordings up to a safe peak, then apply a soft limiter.
+    double peak = 0.0;
+    for (var c=0;c<outputChannels;c++) {
+      for (var f=0;f<totalFrames;f++) {
+        peak = math.max(peak, output[c][f].abs());
+      }
+    }
+    final autoGain = peak > 0.00001 ? math.min(3.0, 0.90 / peak) : 1.0;
     final pcm = BytesBuilder();
     for (var f=0;f<totalFrames;f++) {
       for (var c=0;c<outputChannels;c++) {
-        final sample = (output[c][f].clamp(-1.0,0.999969) * 32768).round();
+        final lifted = output[c][f] * autoGain;
+        final limited = math.tanh(lifted * 1.15) / math.tanh(1.15);
+        final sample = (limited.clamp(-1.0,0.999969) * 32768).round();
         final b = ByteData(2)..setInt16(0,sample,Endian.little);
         pcm.add(b.buffer.asUint8List());
       }
