@@ -409,23 +409,23 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:12),
       Row(children:[
-        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>setState(()=>{level=v;processed=null;}))),
+        Expanded(child:roundDial('E.LEVEL',level,0,100,'${level.round()}','%',(v)=>setState(() { level=v; processed=null; }))),
         const SizedBox(width:8),
-        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(()=>feedback=v))),
+        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(() { feedback=v; processed=null; }))),
       ]),
       const SizedBox(height:12),
       Row(children:[
-        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(()=>{delayTime=v;processed=null;}))),
+        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(() { delayTime=v; processed=null; }))),
         const SizedBox(width:8),
-        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(()=>{eq[0]=v;processed=null;}))),
+        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(() { eq[0]=v; processed=null; }))),
       ]),
     ])),
-    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(()=>{eq[4]=v;processed=null;}))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
+    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(() { eq[4]=v; processed=null; }))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
     noiseControlCard(),
     box(Row(children:[
-      Expanded(child:roundToggle('PING-PONG',pingPong,Colors.purpleAccent,()=>setState(()=>pingPong=!pingPong))),
+      Expanded(child:roundToggle('PING-PONG L ↔ R',pingPong,Colors.purpleAccent,()=>setState(() { pingPong=!pingPong; processed=null; }))),
       const SizedBox(width:10),
-      Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>setState(()=>bypass=!bypass))),
+      Expanded(child:roundToggle('BYPASS',bypass,Colors.orangeAccent,()=>setState(() { bypass=!bypass; processed=null; }))),
     ])),
     box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       FilledButton.icon(
@@ -446,7 +446,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
   Widget noiseControlCard({bool live=false}) {
     void update(VoidCallback change) {
-      if (live) { _changeLive(change); } else { setState(change); }
+      if (live) { _changeLive(change); } else { setState(() { change(); processed=null; }); }
     }
     return box(Column(children:[
       const Row(children:[Icon(Icons.graphic_eq,color:green,size:24),SizedBox(width:8),
