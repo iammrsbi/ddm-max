@@ -315,21 +315,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       )),
     ])),
     box(Column(children:[
-      const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
-      const SizedBox(height:12),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-        Expanded(child:roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v))),
-        const SizedBox(width:8),
-        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v))),
-      ]),
-      const SizedBox(height:12),
-      Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
-        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>_changeLive(()=>delayTime=v))),
-        const SizedBox(width:8),
-        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>_changeLive(()=>eq[0]=v))),
+      const Text('FIVE MAIN ROTARY KNOBS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const SizedBox(height:14),
+      Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
+        roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v)),
+        roundDial('FEEDBACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v)),
+        roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>_changeLive(()=>delayTime=v)),
+        roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>_changeLive(()=>eq[0]=v)),
+        roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>_changeLive(()=>eq[4]=v)),
       ]),
     ])),
-    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>_changeLive(()=>eq[4]=v))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
+    box(Column(children:[const Text('DELAY MODE',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),const SizedBox(height:10),roundModeDial()])),
     noiseControlCard(live:true),
     box(Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
       Expanded(child:roundToggle('PING-PONG L ↔ R',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
@@ -341,29 +337,35 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
   Widget roundDial(String label,double value,double min,double max,String number,String unit,ValueChanged<double> onChanged){
     final progress=((value-min)/(max-min)).clamp(0.0,1.0).toDouble();
-    return Center(child:GestureDetector(
-      onVerticalDragUpdate:(details)=>onChanged((value-details.delta.dy*(max-min)/150).clamp(min,max).toDouble()),
-      child:SizedBox(width:142,height:142,child:Stack(alignment:Alignment.center,children:[
-        SizedBox(width:132,height:132,child:CircularProgressIndicator(
-          value:progress,strokeWidth:5,backgroundColor:Colors.white12,
-          valueColor:AlwaysStoppedAnimation<Color>(green))),
-        Container(width:116,height:116,decoration:BoxDecoration(
-          shape:BoxShape.circle,
-          gradient:const RadialGradient(colors:[Color(0xFF1A3028),Color(0xFF050B08)]),
-          border:Border.all(color:gold.withOpacity(.75),width:1.4),
-          boxShadow:[BoxShadow(color:green.withOpacity(.20),blurRadius:13)]),
-          child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-            Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.8)),
-            const SizedBox(height:4),
-            FittedBox(child:Text(number,style:const TextStyle(fontFamily:'monospace',fontSize:28,
-              fontWeight:FontWeight.w900,color:Color(0xFF65FF24),
-              shadows:[Shadow(color:green,blurRadius:12)]))),
-            Text(unit,style:const TextStyle(color:gold,fontSize:10,fontWeight:FontWeight.bold)),
-            const SizedBox(height:3),
-            const Text('DRAG',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:1)),
-          ])),
-      ])),
-    ));
+    return SizedBox(width:96,child:Column(mainAxisSize:MainAxisSize.min,children:[
+      SizedBox(height:18,child:Center(child:Text(label, maxLines:1, overflow:TextOverflow.ellipsis,
+        style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.6)))),
+      GestureDetector(
+        onPanUpdate:(details)=>onChanged((value+(details.delta.dx-details.delta.dy)*(max-min)/180).clamp(min,max).toDouble()),
+        child:SizedBox(width:78,height:78,child:Stack(alignment:Alignment.center,children:[
+          SizedBox(width:76,height:76,child:CircularProgressIndicator(
+            value:progress,strokeWidth:4,backgroundColor:Colors.white12,
+            valueColor:AlwaysStoppedAnimation<Color>(green))),
+          Transform.rotate(angle:(progress*1.5-0.75)*3.1415926535,child:Container(
+            width:64,height:64,decoration:BoxDecoration(
+              shape:BoxShape.circle,
+              gradient:const RadialGradient(colors:[Color(0xFF29465A),Color(0xFF071421)]),
+              border:Border.all(color:gold.withOpacity(.85),width:1.5),
+              boxShadow:[BoxShadow(color:green.withOpacity(.24),blurRadius:12)]),
+            child:Stack(alignment:Alignment.center,children:[
+              Container(width:7,height:7,decoration:const BoxDecoration(shape:BoxShape.circle,color:gold)),
+              Positioned(top:5,child:Container(width:3,height:12,decoration:BoxDecoration(
+                color:green,borderRadius:BorderRadius.circular(3),
+                boxShadow:[BoxShadow(color:green.withOpacity(.9),blurRadius:5)]))),
+            ]),
+          )),
+        ])),
+      ),
+      const SizedBox(height:4),
+      FittedBox(fit:BoxFit.scaleDown,child:Text('$number $unit',maxLines:1,
+        style:const TextStyle(fontFamily:'monospace',fontSize:15,fontWeight:FontWeight.w900,
+          color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:8)]))),
+    ]));
   }
 
   Widget roundModeDial(){
@@ -442,21 +444,17 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       sw('REPEAT / LOOP',loop,(v)async{setState(()=>loop=v);await player.setReleaseMode(v?ReleaseMode.loop:ReleaseMode.release);}),
     ])),
     box(Column(children:[
-      const Text('FIVE DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
-      const SizedBox(height:12),
-      Row(children:[
-        Expanded(child:roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>setState(() { mix=v; processed=null; }))),
-        const SizedBox(width:8),
-        Expanded(child:roundDial('F.BACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(() { feedback=v; processed=null; }))),
-      ]),
-      const SizedBox(height:12),
-      Row(children:[
-        Expanded(child:roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(() { delayTime=v; processed=null; }))),
-        const SizedBox(width:8),
-        Expanded(child:roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(() { eq[0]=v; processed=null; }))),
+      const Text('FIVE MAIN ROTARY KNOBS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const SizedBox(height:14),
+      Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
+        roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>setState(() { mix=v; processed=null; })),
+        roundDial('FEEDBACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(() { feedback=v; processed=null; })),
+        roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(() { delayTime=v; processed=null; })),
+        roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(() { eq[0]=v; processed=null; })),
+        roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(() { eq[4]=v; processed=null; })),
       ]),
     ])),
-    box(Row(children:[Expanded(child:roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(() { eq[4]=v; processed=null; }))),const SizedBox(width:12),Expanded(child:roundModeDial())])),
+    box(Column(children:[const Text('DELAY MODE',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),const SizedBox(height:10),roundModeDial()])),
     noiseControlCard(),
     box(Row(children:[
       Expanded(child:roundToggle('PING-PONG L ↔ R',pingPong,Colors.purpleAccent,()=>setState(() { pingPong=!pingPong; processed=null; }))),
