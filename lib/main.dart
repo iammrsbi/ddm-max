@@ -315,14 +315,14 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       )),
     ])),
     box(Column(children:[
-      const Text('FIVE MAIN ROTARY KNOBS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+      const Text('FIVE MAIN DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:14),
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
-        roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>_changeLive(()=>mix=v)),
-        roundDial('FEEDBACK',feedback,0,92,'${feedback.round()}','%',(v)=>_changeLive(()=>feedback=v)),
-        roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>_changeLive(()=>delayTime=v)),
-        roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>_changeLive(()=>eq[0]=v)),
-        roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>_changeLive(()=>eq[4]=v)),
+        numberControl('E.LEVEL',mix,0,100,'%',1,(v)=>_changeLive(()=>mix=v)),
+        numberControl('FEEDBACK',feedback,0,92,'%',1,(v)=>_changeLive(()=>feedback=v)),
+        numberControl('TIME',delayTime,40,1200,'ms',10,(v)=>_changeLive(()=>delayTime=v)),
+        numberControl('BASS',eq[0],-12,12,'dB',1,(v)=>_changeLive(()=>eq[0]=v)),
+        numberControl('TREBLE',eq[4],-12,12,'dB',1,(v)=>_changeLive(()=>eq[4]=v)),
       ]),
     ])),
     box(Column(children:[const Text('DELAY MODE',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),const SizedBox(height:10),roundModeDial()])),
@@ -335,38 +335,42 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     box(const Text('BASS and TREBLE controls adjust the low and high EQ bands.',style:TextStyle(color:Colors.white60,fontSize:10))),
   ]);
 
-  Widget roundDial(String label,double value,double min,double max,String number,String unit,ValueChanged<double> onChanged){
-    final progress=((value-min)/(max-min)).clamp(0.0,1.0).toDouble();
-    return SizedBox(width:96,child:Column(mainAxisSize:MainAxisSize.min,children:[
-      SizedBox(height:18,child:Center(child:Text(label, maxLines:1, overflow:TextOverflow.ellipsis,
+  Widget numberControl(String label,double value,double min,double max,String unit,double step,ValueChanged<double> onChanged){
+    final shown=value.round().toString();
+    void adjust(double direction){
+      onChanged((value+direction*step).clamp(min,max).toDouble());
+    }
+    return SizedBox(width:146,child:Column(mainAxisSize:MainAxisSize.min,children:[
+      SizedBox(height:20,child:Center(child:Text(label,maxLines:1,overflow:TextOverflow.ellipsis,
         style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:.6)))),
-      GestureDetector(
-        onPanUpdate:(details)=>onChanged((value+(details.delta.dx-details.delta.dy)*(max-min)/180).clamp(min,max).toDouble()),
-        child:SizedBox(width:78,height:78,child:Stack(alignment:Alignment.center,children:[
-          SizedBox(width:76,height:76,child:CircularProgressIndicator(
-            value:progress,strokeWidth:4,backgroundColor:Colors.white12,
-            valueColor:AlwaysStoppedAnimation<Color>(green))),
-          Transform.rotate(angle:(progress*1.5-0.75)*3.1415926535,child:Container(
-            width:64,height:64,decoration:BoxDecoration(
-              shape:BoxShape.circle,
-              gradient:const RadialGradient(colors:[Color(0xFF29465A),Color(0xFF071421)]),
-              border:Border.all(color:gold.withOpacity(.85),width:1.5),
-              boxShadow:[BoxShadow(color:green.withOpacity(.24),blurRadius:12)]),
-            child:Stack(alignment:Alignment.center,children:[
-              Container(width:7,height:7,decoration:const BoxDecoration(shape:BoxShape.circle,color:gold)),
-              Positioned(top:5,child:Container(width:3,height:12,decoration:BoxDecoration(
-                color:green,borderRadius:BorderRadius.circular(3),
-                boxShadow:[BoxShadow(color:green.withOpacity(.9),blurRadius:5)]))),
-            ]),
-          )),
-        ])),
+      const SizedBox(height:5),
+      Container(height:54,padding:const EdgeInsets.symmetric(horizontal:3),
+        decoration:BoxDecoration(color:const Color(0xFF06121D),borderRadius:BorderRadius.circular(14),
+          border:Border.all(color:green.withOpacity(.75),width:1.3),
+          boxShadow:[BoxShadow(color:green.withOpacity(.13),blurRadius:10)]),
+        child:Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
+          _stepButton(Icons.remove,()=>adjust(-1)),
+          Expanded(child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+            FittedBox(fit:BoxFit.scaleDown,child:Text(shown,maxLines:1,
+              style:const TextStyle(fontFamily:'monospace',fontSize:22,fontWeight:FontWeight.w900,
+                color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:8)]))),
+            Text(unit,style:const TextStyle(fontSize:8,color:gold,fontWeight:FontWeight.bold)),
+          ])),
+          _stepButton(Icons.add,()=>adjust(1)),
+        ]),
       ),
-      const SizedBox(height:4),
-      FittedBox(fit:BoxFit.scaleDown,child:Text('$number $unit',maxLines:1,
-        style:const TextStyle(fontFamily:'monospace',fontSize:15,fontWeight:FontWeight.w900,
-          color:Color(0xFF65FF24),shadows:[Shadow(color:green,blurRadius:8)]))),
     ]));
   }
+
+  Widget _stepButton(IconData icon,VoidCallback onPressed)=>SizedBox(
+    width:34,height:42,child:IconButton(
+      onPressed:onPressed, padding:EdgeInsets.zero, visualDensity:VisualDensity.compact,
+      style:IconButton.styleFrom(backgroundColor:green.withOpacity(.16),
+        foregroundColor:green,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10)),
+        side:BorderSide(color:green.withOpacity(.45))),
+      icon:Icon(icon,size:19),
+    ),
+  );
 
   Widget roundModeDial(){
     final name=delayModeNames[delayMode];
@@ -447,11 +451,11 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE MAIN ROTARY KNOBS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:14),
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
-        roundDial('E.LEVEL',mix,0,100,'${mix.round()}','%',(v)=>setState(() { mix=v; processed=null; })),
-        roundDial('FEEDBACK',feedback,0,92,'${feedback.round()}','%',(v)=>setState(() { feedback=v; processed=null; })),
-        roundDial('TIME',delayTime,40,1200,'${delayTime.round()}','ms',(v)=>setState(() { delayTime=v; processed=null; })),
-        roundDial('BASS',eq[0],-12,12,'${eq[0].round()}','dB',(v)=>setState(() { eq[0]=v; processed=null; })),
-        roundDial('TREBLE',eq[4],-12,12,'${eq[4].round()}','dB',(v)=>setState(() { eq[4]=v; processed=null; })),
+        numberControl('E.LEVEL',mix,0,100,'%',1,(v)=>setState(() { mix=v; processed=null; })),
+        numberControl('FEEDBACK',feedback,0,92,'%',1,(v)=>setState(() { feedback=v; processed=null; })),
+        numberControl('TIME',delayTime,40,1200,'ms',10,(v)=>setState(() { delayTime=v; processed=null; })),
+        numberControl('BASS',eq[0],-12,12,'dB',1,(v)=>setState(() { eq[0]=v; processed=null; })),
+        numberControl('TREBLE',eq[4],-12,12,'dB',1,(v)=>setState(() { eq[4]=v; processed=null; })),
       ]),
     ])),
     box(Column(children:[const Text('DELAY MODE',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),const SizedBox(height:10),roundModeDial()])),
@@ -489,7 +493,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Row(children:[
         Expanded(child:roundToggle('ANC',noiseReduction,green,()=>update(()=>noiseReduction=!noiseReduction))),
         const SizedBox(width:10),
-        Expanded(child:roundDial('ANC LEVEL',ancLevel,0,100,'${ancLevel.round()}','%',(v)=>update(()=>ancLevel=v))),
+        Expanded(child:numberControl('ANC LEVEL',ancLevel,0,100,'%',1,(v)=>update(()=>ancLevel=v))),
       ]),
       const SizedBox(height:7),
       const SizedBox(height:6),
