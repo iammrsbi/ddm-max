@@ -62,7 +62,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     if (picked.path != null) {
       final source = File(picked.path!);
       if (await source.exists()) {
-        try { await source.copy(destination.path); } catch (_) {}
+        try { await source.copy(destination.path); } catch (_) {
+          if (await destination.exists()) await destination.delete();
+        }
       }
     }
     if (!await destination.exists() && picked.readStream != null) {
@@ -93,7 +95,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
       await player.stop();
       setState(() {
-        selected = file; processed = null;
+        selected = file; processed = null; currentPlayback = null;
         fileDuration = Duration.zero; filePosition = Duration.zero; playbackPaused = false;
       });
       try {
