@@ -50,6 +50,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   @override void initState(){super.initState(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st==PlayerState.paused);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
   @override void dispose(){liveChannel.invokeMethod('stop');player.dispose();recorder.dispose();super.dispose();}
 
+  double get minDelayMs => delayMode==0 ? 12.5 : (delayMode==1 ? 50 : (delayMode==2 ? 200 : 50));
+  double get maxDelayMs => delayMode==0 ? 50 : (delayMode==1 ? 200 : (delayMode==2 ? 800 : 200));
   void note(String s){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));}
   Future<File> _copyPickedAudio(PlatformFile picked) async {
     final docs = await getApplicationDocumentsDirectory();
@@ -330,7 +332,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
         numberControl('E.LEVEL',level,0,100,'%',1,(v)=>_changeLive(()=>level=v)),
         numberControl('FEEDBACK',feedback,0,92,'%',1,(v)=>_changeLive(()=>feedback=v)),
-        numberControl('TIME / DELAY',delayTime,12.5,800,'ms',2,(v)=>_changeLive(()=>delayTime=v)),
+        numberControl('TIME / DELAY',delayTime,minDelayMs,maxDelayMs,'ms',2,(v)=>_changeLive(()=>delayTime=v)),
         numberControl('BASS',eq[0],-12,12,'dB',1,(v)=>_changeLive(()=>eq[0]=v)),
         numberControl('TREBLE',eq[4],-12,12,'dB',1,(v)=>_changeLive(()=>eq[4]=v)),
       ]),
