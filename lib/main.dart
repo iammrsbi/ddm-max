@@ -16,7 +16,7 @@ const green = Color(0xFF168DFF), gold = Color(0xFF45CAFF), panel = Color(0xE6071
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
   @override Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner:false, title:'DDM-MAX',
+    debugShowCheckedModeBanner:false, title:'DDM MAX',
     theme:ThemeData(brightness:Brightness.dark,scaffoldBackgroundColor:const Color(0xFF030914),
       colorScheme:ColorScheme.fromSeed(seedColor:green,brightness:Brightness.dark),
       sliderTheme:const SliderThemeData(activeTrackColor:green,thumbColor:gold,inactiveTrackColor:Colors.white24)),
