@@ -84,7 +84,7 @@ class WavEchoEngine {
     final lengthData = dataLength!;
     final frames = lengthData ~/ (ch * 2);
     final delayFrames = math.max(1, (rate * delayMs / 1000).round()).toInt();
-    final tailFrames = bypass ? 0 : delayFrames * (dual ? 5 : 4);
+    final tailFrames = bypass ? 0 : delayFrames * (mode == 3 ? 8 : (dual ? 5 : 4));
     final totalFrames = frames + tailFrames;
     final dry = List<Float64List>.generate(ch, (_) => Float64List(totalFrames));
     for (var f = 0; f < frames; f++) {
@@ -116,7 +116,7 @@ class WavEchoEngine {
     });
     final filtered = List<Float64List>.generate(ch, (c) {
       final out = Float64List(totalFrames);
-      if (bypass) { for (var i=0;i<frames;i++) { out[i]=dry[c][i]; } return out; }
+      if (bypass) { for (var i=0;i<frames;i++) { out[i]=cleaned[c][i]; } return out; }
       final centers = [100.0, 350.0, 1000.0, 3500.0, 9000.0];
       final gains = List<double>.generate(5, (i) => (i < eq.length ? eq[i] : 0).clamp(-12, 12).toDouble());
       // Five broad, stable peaking bands using RBJ biquad coefficients.
@@ -161,8 +161,8 @@ class WavEchoEngine {
       final delayedR = lineR[idxR];
       var echoL = delayedL;
       var echoR = delayedR;
-      final toneAlpha = switch (mode) { 1 => 0.20, 2 => 0.12, 3 => 0.075, 4 => 0.24, _ => 1.0 };
-      if (mode >= 1 && mode <= 4) {
+      final toneAlpha = switch (mode) { 1 => 0.20, 2 => 0.12, 3 => 0.24, _ => 1.0 };
+      if (mode >= 1 && mode <= 3) {
         echoToneL += toneAlpha * (echoL - echoToneL);
         echoToneR += toneAlpha * (echoR - echoToneR);
         echoL = echoToneL;
@@ -173,7 +173,7 @@ class WavEchoEngine {
         final saturatedR = echoR * 1.25;
         echoL = saturatedL / (1.0 + saturatedL.abs() * 0.20);
         echoR = saturatedR / (1.0 + saturatedR.abs() * 0.20);
-      } else if (mode == 4) {
+      } else if (mode == 3) {
         final wobble = 0.88 + 0.12 * math.sin(2 * math.pi * f / (rate * 2.8));
         echoL *= wobble;
         echoR *= wobble;
