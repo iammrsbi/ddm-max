@@ -38,7 +38,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   double level=50,feedback=30,delayTime=200,mix=50;
   final List<double> eq=[0,0,0,0,0];
   String eqPreset='FLAT';
-  bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false,liveMonitoring=false;
+  bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,recordingHeld=false,working=false,liveMonitoring=false;
   bool noiseReduction=true,noiseGate=true;
   static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
   final AudioPlayer player=AudioPlayer();
@@ -240,6 +240,13 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       setState(()=>recording=true);note('Mic recording start ho gayi.');
     }catch(e){note('Recording start nahi hui: $e');}
   }
+  Future<void> toggleRecordingHold() async {
+    try {
+      if(!recording){note('Pehle RECORD dabao.');return;}
+      if(recordingHeld){await recorder.resume();setState(()=>recordingHeld=false);note('Recording resume ho gayi.');}
+      else {await recorder.pause();setState(()=>recordingHeld=true);note('Recording HOLD par hai.');}
+    }catch(e){note('Hold control error: $e');}
+  }
   Future<void> stopRecording() async {
     try{
       final p=await recorder.stop();
@@ -329,6 +336,33 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       ]),
     ])),
     box(Column(children:[const Text('DELAY MODE',style:TextStyle(color:gold,fontWeight:FontWeight.w900)),const SizedBox(height:10),roundModeDial()])),
+    box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Text('SHORT LOOP • RECORD / HOLD / REPEAT / STOP',
+        style:TextStyle(color:gold,fontWeight:FontWeight.w900,fontSize:11)),
+      const SizedBox(height:10),
+      Wrap(spacing:7,runSpacing:7,alignment:WrapAlignment.center,children:[
+        FilledButton.tonalIcon(onPressed:recording?null:startRecording,
+          icon:const Icon(Icons.fiber_manual_record),label:const Text('RECORD')),
+        FilledButton.tonalIcon(onPressed:recording?toggleRecordingHold:null,
+          icon:Icon(recordingHeld?Icons.play_arrow:Icons.pause),
+          label:Text(recordingHeld?'RESUME':'HOLD')),
+        FilledButton.tonalIcon(onPressed:recorded==null?null:()async{
+          setState(()=>loop=true);
+          await player.setReleaseMode(ReleaseMode.loop);
+          await play(recorded);
+        },icon:const Icon(Icons.repeat),label:const Text('REPEAT')),
+        FilledButton.tonalIcon(onPressed:()async{
+          if(recording) await stopRecording();
+          await stop();
+          setState(()=>loop=false);
+          await player.setReleaseMode(ReleaseMode.release);
+        },icon:const Icon(Icons.stop),label:const Text('STOP')),
+      ]),
+      if(recorded!=null) Padding(padding:const EdgeInsets.only(top:8),
+        child:Text('RECORDED LOOP READY • ${recorded!.path.split('/').last}',
+          style:const TextStyle(color:green,fontSize:9))),
+    ])),
+
     noiseControlCard(live:true),
     box(Row(mainAxisAlignment:MainAxisAlignment.spaceEvenly,children:[
       Expanded(child:roundToggle('PING-PONG L ↔ R',pingPong,Colors.purpleAccent,()=>_changeLive(()=>pingPong=!pingPong))),
@@ -376,35 +410,38 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   );
 
   Widget roundModeDial(){
-    final name=delayModeNames[delayMode];
-    return Center(child:GestureDetector(
-      onTap:()=>_changeLive(() {
-        delayMode=(delayMode+1)%delayModeNames.length;
-        dual=false;
-        switch(delayMode) {
-          case 0: delayTime=30; feedback=28; break;
-          case 1: delayTime=200; feedback=30; break;
-          case 2: delayTime=500; feedback=42; break;
-          case 3: delayTime=200; feedback=55; break;
-        }
-        processed=null;
-      }),
-      child:Container(width:132,height:132,decoration:BoxDecoration(
-        shape:BoxShape.circle,gradient:const RadialGradient(colors:[Color(0xFF243B34),Color(0xFF050B08)]),
-        border:Border.all(color:Colors.lightBlueAccent,width:2),
-        boxShadow:[BoxShadow(color:Colors.lightBlueAccent.withOpacity(.20),blurRadius:14)]),
-        child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-          const Text('MODE',style:TextStyle(fontSize:10,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:1)),
-          const SizedBox(height:4),
-          Text((delayMode+1).toString().padLeft(2,'0'),style:const TextStyle(fontFamily:'monospace',
-            fontSize:29,fontWeight:FontWeight.w900,color:Color(0xFF65FF24),
-            shadows:[Shadow(color:green,blurRadius:12)])),
-          Text(name,style:const TextStyle(color:gold,fontSize:9,fontWeight:FontWeight.w900)),
-          const SizedBox(height:3),
-          const Text('TAP TO CHANGE',style:TextStyle(color:Colors.white38,fontSize:8,letterSpacing:.7)),
-        ]),
-      ),
-    ));
+    const labels=['S','M','L','SHORT LOOP'];
+    const ranges=['12.5–50 ms','50–200 ms','200–800 ms','Record / Hold / Repeat'];
+    return Column(children:[
+      Wrap(spacing:7,runSpacing:8,alignment:WrapAlignment.center,children:[
+        for(var i=0;i<labels.length;i++)
+          SizedBox(width:i==3?150:66,child:OutlinedButton(
+            onPressed:()=>_changeLive((){
+              delayMode=i;
+              dual=false;
+              switch(i){
+                case 0: delayTime=30; feedback=28; break;
+                case 1: delayTime=200; feedback=30; break;
+                case 2: delayTime=500; feedback=42; break;
+                case 3: delayTime=200; feedback=55; break;
+              }
+              processed=null;
+            }),
+            style:OutlinedButton.styleFrom(
+              backgroundColor:delayMode==i?green:const Color(0xFF071426),
+              foregroundColor:delayMode==i?Colors.black:Colors.white,
+              side:BorderSide(color:delayMode==i?green:const Color(0xFF174D80)),
+              padding:const EdgeInsets.symmetric(horizontal:8,vertical:12),
+              shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(10))),
+            child:Text(labels[i],textAlign:TextAlign.center,
+              style:const TextStyle(fontSize:10,fontWeight:FontWeight.w900)))),
+      ]),
+      const SizedBox(height:10),
+      Text(ranges[delayMode],style:const TextStyle(color:gold,fontSize:11,fontWeight:FontWeight.bold)),
+      if(delayMode==3) const Padding(padding:EdgeInsets.only(top:5),
+        child:Text('SHORT LOOP is a recorded phrase loop, not a long delay preset.',
+          textAlign:TextAlign.center,style:TextStyle(color:Colors.white60,fontSize:9))),
+    ]);
   }
 
   Widget roundToggle(String label,bool active,Color color,VoidCallback onTap)=>GestureDetector(
