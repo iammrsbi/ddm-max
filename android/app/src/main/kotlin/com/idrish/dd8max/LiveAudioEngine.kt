@@ -46,7 +46,10 @@ class LiveAudioEngine {
         noiseReduction: Boolean, noiseGate: Boolean, ancLevel: Double,
         dual: Boolean, pingPong: Boolean, bypass: Boolean, eq: List<Double>, mode: Int
     ) {
-        delaySamples = (44100L * delayMs.coerceIn(40, 1200) / 1000L).toInt().coerceAtLeast(1)
+        val safeMode = mode.coerceIn(0, 3)
+        val minDelay = when (safeMode) { 0 -> 13; 1 -> 50; 2 -> 200; else -> 50 }
+        val maxDelay = when (safeMode) { 0 -> 50; 1 -> 200; 2 -> 800; else -> 200 }
+        delaySamples = (44100L * delayMs.coerceIn(minDelay, maxDelay) / 1000L).toInt().coerceAtLeast(1)
         feedbackValue = feedback.coerceIn(0.0, 0.92).toFloat()
         mixValue = mix.coerceIn(0.0, 1.0).toFloat()
         levelValue = level.coerceIn(0.0, 1.5).toFloat()
@@ -56,7 +59,7 @@ class LiveAudioEngine {
         dualValue = dual
         pingPongValue = pingPong
         bypassValue = bypass
-        modeValue = mode.coerceIn(0, 3)
+        modeValue = safeMode
         eqGains = FloatArray(5) { i -> (eq.getOrNull(i) ?: 0.0).coerceIn(-12.0, 12.0).toFloat() }
         try { noiseSuppressor?.enabled = noiseReduction } catch (_: Exception) {}
     }
