@@ -11,13 +11,13 @@ import 'package:share_plus/share_plus.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
-const green = Color(0xFF00BFFF), gold = Color(0xFFFFC857), panel = Color(0xB0081424);
+const green = Color(0xFF168DFF), gold = Color(0xFF45CAFF), panel = Color(0xE6071426);
 
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'DDM-MAX',
-    theme:ThemeData(brightness:Brightness.dark,scaffoldBackgroundColor:const Color(0xFF07110E),
+    theme:ThemeData(brightness:Brightness.dark,scaffoldBackgroundColor:const Color(0xFF030914),
       colorScheme:ColorScheme.fromSeed(seedColor:green,brightness:Brightness.dark),
       sliderTheme:const SliderThemeData(activeTrackColor:green,thumbColor:gold,inactiveTrackColor:Colors.white24)),
     home:const ConsoleHome());
@@ -29,13 +29,13 @@ class ConsoleHome extends StatefulWidget {
 }
 class _ConsoleHomeState extends State<ConsoleHome> {
   int tab=0;
-  int delayMode=0;
+  int delayMode=1;
   static const List<String> delayModeNames=['S','M','L','SHORT LOOP'];
   Duration fileDuration=Duration.zero, filePosition=Duration.zero;
   final List<DateTime> _tapTimes=[];
   int tapBpm=120;
   bool playbackPaused=false;
-  double level=80,feedback=38,delayTime=320,mix=45;
+  double level=50,feedback=30,delayTime=200,mix=50;
   final List<double> eq=[0,0,0,0,0];
   String eqPreset='FLAT';
   bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,working=false,liveMonitoring=false;
@@ -151,7 +151,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     if(gaps.isEmpty) { _tapTimes..clear()..add(now); return; }
     final average=gaps.reduce((x,y)=>x+y)/gaps.length;
     final bpm=(60000/average).round().clamp(30,300);
-    _changeLive(() { tapBpm=bpm; delayTime=60000/bpm; processed=null; });
+    _changeLive(() { tapBpm=bpm; delayTime=(60000/bpm).clamp(12.5,800).toDouble(); processed=null; });
   }
 
   Future<void> stop() async { await player.stop(); if(mounted)setState(()=>filePosition=Duration.zero); }
@@ -266,8 +266,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     final pages=[delayPage(),filePage()];
     return Scaffold(
       body:Stack(fit:StackFit.expand,children:[
-        Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF07110E))),
-        Container(color:const Color(0x5507100D)),
+        Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF030914))),
+        Container(color:const Color(0x99030712)),
         SafeArea(child:Column(children:[header(),Expanded(child:pages[tab])])),
       ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
@@ -281,8 +281,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   Widget header()=>Padding(padding:const EdgeInsets.fromLTRB(16,10,16,12),child:Row(children:[
     Container(width:46,height:46,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:gold,width:1.5),color:Colors.black54),child:const Icon(Icons.graphic_eq,color:gold,size:27)),
     const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Text('DDM-MAX',style:TextStyle(fontSize:23,fontWeight:FontWeight.w900,letterSpacing:2)),
-      Text('DIGITAL DELAY • NAAT AUDIO SYSTEM',style:TextStyle(fontSize:9,color:gold,letterSpacing:1.1)),
+      Text('DDM MAX',style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,letterSpacing:2,color:gold)),
+      Text('IDRISH',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900,letterSpacing:5,color:Colors.white)),
+      Text('HOLOGRAM X • PRO AUDIO',style:TextStyle(fontSize:9,color:green,letterSpacing:2)),
     ])),_pill('AUDIO READY'),
   ]));
   Widget scroll(List<Widget> c)=>SingleChildScrollView(padding:const EdgeInsets.fromLTRB(14,4,14,20),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:c));
@@ -320,9 +321,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE MAIN DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:14),
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
-        numberControl('E.LEVEL',mix,0,100,'%',1,(v)=>_changeLive(()=>mix=v)),
+        numberControl('E.LEVEL',level,0,100,'%',1,(v)=>_changeLive(()=>level=v)),
         numberControl('FEEDBACK',feedback,0,92,'%',1,(v)=>_changeLive(()=>feedback=v)),
-        numberControl('TIME',delayTime,40,1200,'ms',10,(v)=>_changeLive(()=>delayTime=v)),
+        numberControl('TIME / DELAY',delayTime,12.5,800,'ms',2,(v)=>_changeLive(()=>delayTime=v)),
         numberControl('BASS',eq[0],-12,12,'dB',1,(v)=>_changeLive(()=>eq[0]=v)),
         numberControl('TREBLE',eq[4],-12,12,'dB',1,(v)=>_changeLive(()=>eq[4]=v)),
       ]),
@@ -381,10 +382,10 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         delayMode=(delayMode+1)%delayModeNames.length;
         dual=false;
         switch(delayMode) {
-          case 0: delayTime=120; feedback=28; break;
-          case 1: delayTime=320; feedback=38; break;
-          case 2: delayTime=650; feedback=48; break;
-          case 3: delayTime=85; feedback=72; break;
+          case 0: delayTime=30; feedback=28; break;
+          case 1: delayTime=200; feedback=30; break;
+          case 2: delayTime=500; feedback=42; break;
+          case 3: delayTime=200; feedback=55; break;
         }
         processed=null;
       }),
@@ -463,9 +464,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       const Text('FIVE MAIN DIGITAL CONTROLS',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
       const SizedBox(height:14),
       Wrap(alignment:WrapAlignment.center,spacing:7,runSpacing:14,children:[
-        numberControl('E.LEVEL',mix,0,100,'%',1,(v)=>setState(() { mix=v; processed=null; })),
+        numberControl('E.LEVEL',level,0,100,'%',1,(v)=>setState(() { level=v; processed=null; })),
         numberControl('FEEDBACK',feedback,0,92,'%',1,(v)=>setState(() { feedback=v; processed=null; })),
-        numberControl('TIME',delayTime,40,1200,'ms',10,(v)=>setState(() { delayTime=v; processed=null; })),
+        numberControl('TIME / DELAY',delayTime,12.5,800,'ms',2,(v)=>setState(() { delayTime=v; processed=null; })),
         numberControl('BASS',eq[0],-12,12,'dB',1,(v)=>setState(() { eq[0]=v; processed=null; })),
         numberControl('TREBLE',eq[4],-12,12,'dB',1,(v)=>setState(() { eq[4]=v; processed=null; })),
       ]),
