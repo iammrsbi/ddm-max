@@ -499,8 +499,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       if (live) { _changeLive(change); } else { setState(() { change(); processed=null; }); }
     }
     return box(Column(children:[
-      const Row(children:[Icon(Icons.graphic_eq,color:green,size:24),SizedBox(width:8),
-        Text(live?'ANC • LIVE MIC NOISE REDUCTION':'ANC • FILE NOISE REDUCTION',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.6))]),
+      Row(children:[const Icon(Icons.graphic_eq,color:green,size:24),const SizedBox(width:8),
+        Text(live?'ANC • LIVE MIC NOISE REDUCTION':'ANC • FILE NOISE REDUCTION',style:const TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:.6))]),
       const SizedBox(height:10),
       Row(children:[
         Expanded(child:roundToggle('ANC',noiseReduction,green,()=>update(()=>noiseReduction=!noiseReduction))),
