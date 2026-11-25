@@ -11,7 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'wav_echo_engine.dart';
 
 void main() => runApp(const DDMMaxApp());
-const green = Color(0xFF168DFF), gold = Color(0xFF45CAFF), panel = Color(0xE6071426);
+const green = Color(0xFF168DFF), gold = Color(0xFF45CAFF), panel = Color(0xF20A1422);
 
 class DDMMaxApp extends StatelessWidget {
   const DDMMaxApp({super.key});
@@ -35,16 +35,16 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   final List<DateTime> _tapTimes=[];
   int tapBpm=120;
   bool playbackPaused=false;
-  double level=50,feedback=30,delayTime=200,mix=50;
+  double level=100,feedback=30,delayTime=200,mix=55;
   final List<double> eq=[0,0,0,0,0];
   String eqPreset='FLAT';
   bool bypass=false,pingPong=false,dual=false,loop=false,recording=false,recordingHeld=false,working=false,liveMonitoring=false;
-  bool noiseReduction=true,noiseGate=true;
+  bool noiseReduction=true,noiseGate=false;
   static const MethodChannel liveChannel=MethodChannel('ddm.max/live_audio');
   final AudioPlayer player=AudioPlayer();
   final AudioRecorder recorder=AudioRecorder();
   File? selected,processed,recorded,currentPlayback;
-  double playbackVolume=1.0,ancLevel=65;
+  double playbackVolume=1.0,ancLevel=35;
   String? recordingPath;
 
   @override void initState(){super.initState(); player.onDurationChanged.listen((d){if(mounted)setState(()=>fileDuration=d);}); player.onPositionChanged.listen((p){if(mounted)setState(()=>filePosition=p);}); player.onPlayerStateChanged.listen((st){if(mounted)setState(()=>playbackPaused=st==PlayerState.paused);}); player.onPlayerComplete.listen((_){if(mounted)setState(()=>filePosition=fileDuration);});}
@@ -296,11 +296,11 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     return Scaffold(
       body:Stack(fit:StackFit.expand,children:[
         Image.asset('assets/combo_bg.jpg',fit:BoxFit.cover,errorBuilder:(_,__,___)=>Container(color:const Color(0xFF030914))),
-        Container(color:const Color(0x99030712)),
+        Container(color:const Color(0xCC030712)),
         SafeArea(child:Column(children:[header(),Expanded(child:pages[tab])])),
       ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
-        backgroundColor:const Color(0xFF0B1713),indicatorColor:green.withOpacity(.22),
+        backgroundColor:const Color(0xFF080F19),indicatorColor:green.withOpacity(.22),
         destinations:const[
           NavigationDestination(icon:Icon(Icons.mic),label:'LIVE MIC'),
           NavigationDestination(icon:Icon(Icons.audio_file),label:'PICK FILE'),
@@ -312,7 +312,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Text('DDM MAX',style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,letterSpacing:2,color:gold)),
       Text('IDRISH',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900,letterSpacing:5,color:Colors.white)),
-      Text('HOLOGRAM X • PRO AUDIO',style:TextStyle(fontSize:9,color:green,letterSpacing:2)),
+      Text('STUDIO X • BLACK TITANIUM',style:TextStyle(fontSize:9,color:green,letterSpacing:2)),
     ])),_pill('AUDIO READY'),
   ]));
   Widget scroll(List<Widget> c)=>SingleChildScrollView(padding:const EdgeInsets.fromLTRB(14,4,14,20),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:c));
@@ -321,9 +321,9 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     Text(b,style:const TextStyle(fontSize:10,color:Colors.white60)),
   ]));
   Widget box(Widget c)=>Container(margin:const EdgeInsets.only(bottom:13),padding:const EdgeInsets.all(14),
-    decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(23),border:Border.all(color:Colors.white.withOpacity(.16))),child:c);
+    decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(20),border:Border.all(color:green.withOpacity(.30),width:1)),child:c);
   Widget delayPage()=>scroll([
-    title('DDM MAX DIGITAL DELAY','LIVE MIC • Digital controls • Headphones recommended'),
+    title('STUDIO X • DIGITAL DELAY','LIVE MIC • PROFESSIONAL VOICE PROCESSOR'),
     box(Row(children:[
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('TAP TEMPO',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
@@ -484,7 +484,7 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   );
 
   Widget filePage()=>scroll([
-    title('PICK FILE • DIGITAL DELAY','Choose audio • Preview • Adjust effects • Apply & listen'),
+    title('STUDIO X • FILE PROCESSOR','PICK FILE • PREVIEW • PROCESS • EXPORT'),
     box(Row(children:[
       Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('TAP TEMPO',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
