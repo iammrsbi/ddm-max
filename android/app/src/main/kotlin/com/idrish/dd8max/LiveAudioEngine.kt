@@ -170,8 +170,7 @@ class LiveAudioEngine {
                     when (modeValue) {
                         1 -> { echoTone += 0.20f * (echo - echoTone); echo = echoTone }
                         2 -> { echoTone += 0.12f * (echo - echoTone); echo = (kotlin.math.tanh(echoTone * 1.25f)).toFloat() }
-                        3 -> { echoTone += 0.075f * (echo - echoTone); echo = echoTone }
-                        4 -> {
+                        3 -> { echoTone += 0.24f * (echo - echoTone); echo = echoTone * (0.88f + 0.12f * kotlin.math.sin(2.0 * PI * cursor / (rate * 2.8)).toFloat()) }
                             echoTone += 0.24f * (echo - echoTone)
                             val wobble = 0.88f + 0.12f * kotlin.math.sin(2.0 * PI * cursor / (rate * 2.8)).toFloat()
                             echo = echoTone * wobble
