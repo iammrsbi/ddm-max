@@ -115,14 +115,28 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   }
   Future<void> play(File? f) async {
     if (f == null) { note('Pehle audio file select karo.'); return; }
-    if (!await f.exists() || await f.length() == 0) { note('Audio file mil nahi rahi. Dobara upload karo.'); return; }
+    if (!await f.exists() || await f.length() < 44) { note('Audio file missing ya invalid hai. Dobara upload karo.'); return; }
     try {
       await player.stop();
       currentPlayback = f;
       await player.setVolume(playbackVolume);
       await player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.release);
-      await player.play(DeviceFileSource(f.path));
-    } catch (e) { note('Play error: $e'); }
+      // Set the source explicitly before resuming. This avoids relying on an
+      // implicit source transition when switching Original <-> Processed WAV.
+      await player.setSource(DeviceFileSource(f.path));
+      final duration = await player.getDuration();
+      if (mounted && duration != null) {
+        setState(() {
+          fileDuration = duration;
+          filePosition = Duration.zero;
+          playbackPaused = false;
+        });
+      }
+      await player.resume();
+      if (mounted) setState(() => playbackPaused = false);
+    } catch (e) {
+      note('Audio preview start nahi hua: $e');
+    }
   }
   Future<void> togglePause() async {
     try {
@@ -196,6 +210,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
       } on FormatException {
         note('Audio decode/convert ho rahi hai...');
         pcmWav = await _decodeUploadedAudio(source);
+        // Do not pass an unverified decoder output into the DSP engine.
+        await WavEchoEngine.validate(input: pcmWav);
       }
       final output = await WavEchoEngine.render(
         input: pcmWav, outputDirectory: outputDir,
@@ -205,10 +221,14 @@ class _ConsoleHomeState extends State<ConsoleHome> {
         noiseReduction: noiseReduction, noiseGate: noiseGate, ancLevel: ancLevel / 100,
         mode: delayMode,
       );
+      await WavEchoEngine.validate(input: output);
+      if (!await output.exists() || await output.length() < 44) {
+        throw const FormatException('Processed WAV file create nahi hui.');
+      }
       if (!mounted) return;
       setState(() => processed = output);
       await play(output);
-      note('Effect apply ho gaya — processed WAV ab play ho rahi hai.');
+      note('Effect apply ho gaya — PROCESSED PREVIEW play ho raha hai.');
     } catch (e) {
       if (mounted) note('Effect apply nahi hua: $e');
     } finally {
