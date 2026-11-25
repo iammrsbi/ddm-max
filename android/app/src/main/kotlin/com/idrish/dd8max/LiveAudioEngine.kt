@@ -26,7 +26,7 @@ class LiveAudioEngine {
     @Volatile private var delaySamples = 14112
     @Volatile private var feedbackValue = 0.38f
     @Volatile private var mixValue = 0.45f
-    @Volatile private var levelValue = 0.8f
+    @Volatile private var levelValue = 1.0f
     @Volatile private var noiseReductionValue = true
     @Volatile private var noiseGateValue = true
     @Volatile private var ancLevelValue = 0.65f
@@ -76,7 +76,7 @@ class LiveAudioEngine {
         val minOut = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
         if (minIn <= 0 || minOut <= 0) throw IllegalStateException("Audio device unavailable")
         val size = max(8192, max(minIn, minOut))
-        val input = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
+        val input = AudioRecord(MediaRecorder.AudioSource.MIC, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size)
         val output = AudioTrack(AudioManager.STREAM_MUSIC, rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT, size, AudioTrack.MODE_STREAM)
         if (input.state != AudioRecord.STATE_INITIALIZED || output.state != AudioTrack.STATE_INITIALIZED) {
             input.release()
@@ -96,8 +96,8 @@ class LiveAudioEngine {
         try {
             if (AcousticEchoCanceler.isAvailable()) {
                 echoCanceler = AcousticEchoCanceler.create(input.audioSessionId)
-                echoCanceler?.enabled = true
-                echoCancelerActive = echoCanceler?.enabled == true
+                echoCanceler?.enabled = false
+                echoCancelerActive = false
             }
         } catch (_: Exception) { echoCancelerActive = false }
         try {
@@ -140,7 +140,7 @@ class LiveAudioEngine {
                     } else raw
                     val cleaned = raw * (1.0f - strength) + high * strength
                     val magnitude = abs(cleaned)
-                    val threshold = 0.0018f + 0.009f * strength
+                    val threshold = 0.0005f + 0.0020f * strength
                     val targetGate = if (!noiseGateValue) 1.0f else if (magnitude < threshold) 0.06f else if (magnitude < threshold * 2.0f) {
                         0.06f + (magnitude - threshold) / threshold * 0.94f
                     } else 1.0f
@@ -183,7 +183,8 @@ class LiveAudioEngine {
 
                     val wet = if (bypassValue) 0.0f else mixValue
                     val gain = levelValue
-                    val mono = ((dry * (1.0f - wet)) + ((dry + echo) * wet)) * gain
+                    val rawMix = ((dry * (1.0f - wet)) + ((dry + echo) * wet)) * gain
+                    val mono = (kotlin.math.tanh(rawMix * 1.35f) / kotlin.math.tanh(1.35f)).toFloat()
                     val left: Float
                     val right: Float
                     if (pingPongValue && !bypassValue) {
