@@ -32,6 +32,8 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   int delayMode=0;
   static const List<String> delayModeNames=['STANDARD','ANALOG','TAPE','WARM','MOD','DUAL'];
   Duration fileDuration=Duration.zero, filePosition=Duration.zero;
+  final List<DateTime> _tapTimes=[];
+  int tapBpm=120;
   bool playbackPaused=false;
   double level=80,feedback=38,delayTime=320,mix=45;
   final List<double> eq=[0,0,0,0,0];
@@ -132,6 +134,22 @@ class _ConsoleHomeState extends State<ConsoleHome> {
   }
   String _time(Duration d){final m=d.inMinutes.remainder(60).toString().padLeft(2,'0');final sec=d.inSeconds.remainder(60).toString().padLeft(2,'0');final h=d.inHours;return h>0?'$h:$m:$sec':'$m:$sec';}
   Future<void> auditionEffect() async { await process(selected); final output=processed; if(output!=null) await play(output); }
+
+  void tapTempo() {
+    final now=DateTime.now();
+    _tapTimes.add(now);
+    if(_tapTimes.length>5) _tapTimes.removeAt(0);
+    if(_tapTimes.length<2) { note('Tap again to set tempo.'); return; }
+    final gaps=<int>[];
+    for(var i=1;i<_tapTimes.length;i++) {
+      final gap=_tapTimes[i].difference(_tapTimes[i-1]).inMilliseconds;
+      if(gap>0 && gap<2000) gaps.add(gap);
+    }
+    if(gaps.isEmpty) { _tapTimes..clear()..add(now); return; }
+    final average=gaps.reduce((x,y)=>x+y)/gaps.length;
+    final bpm=(60000/average).round().clamp(30,300);
+    _changeLive(() { tapBpm=bpm; delayTime=60000/bpm; processed=null; });
+  }
 
   Future<void> stop() async { await player.stop(); if(mounted)setState(()=>filePosition=Duration.zero); }
   Future<File> _decodeUploadedAudio(File source) async {
@@ -272,6 +290,14 @@ class _ConsoleHomeState extends State<ConsoleHome> {
     decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(23),border:Border.all(color:Colors.white.withOpacity(.16))),child:c);
   Widget delayPage()=>scroll([
     title('DDM MAX DIGITAL DELAY','LIVE MIC • Digital controls • Headphones recommended'),
+    box(Row(children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('TAP TEMPO',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+        Text('$tapBpm BPM',style:const TextStyle(fontFamily:'monospace',fontSize:22,color:Color(0xFF65FF24),fontWeight:FontWeight.w900)),
+      ])),
+      FilledButton.icon(onPressed:tapTempo,icon:const Icon(Icons.touch_app),label:const Text('TAP'),
+        style:FilledButton.styleFrom(backgroundColor:green,foregroundColor:Colors.black,shape:const StadiumBorder(),padding:const EdgeInsets.symmetric(horizontal:28,vertical:16))),
+    ])),
     box(Column(children:[
       const Icon(Icons.mic,color:gold,size:38),
       Text(liveMonitoring?'LIVE MIC • EFFECT ON':'LIVE MIC • STANDBY',
@@ -379,6 +405,14 @@ class _ConsoleHomeState extends State<ConsoleHome> {
 
   Widget filePage()=>scroll([
     title('PICK FILE • DIGITAL DELAY','Choose audio • Preview • Adjust effects • Apply & listen'),
+    box(Row(children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('TAP TEMPO',style:TextStyle(color:gold,fontWeight:FontWeight.w900,letterSpacing:1)),
+        Text('$tapBpm BPM',style:const TextStyle(fontFamily:'monospace',fontSize:20,color:Color(0xFF65FF24),fontWeight:FontWeight.w900)),
+      ])),
+      FilledButton.icon(onPressed:tapTempo,icon:const Icon(Icons.touch_app),label:const Text('TAP'),
+        style:FilledButton.styleFrom(backgroundColor:green,foregroundColor:Colors.black,shape:const StadiumBorder())),
+    ])),
     box(Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       const Icon(Icons.audio_file,color:gold,size:38),
       Text(selected?.path.split('/').last??'NO FILE SELECTED',textAlign:TextAlign.center,maxLines:2,
